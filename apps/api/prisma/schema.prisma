@@ -1,0 +1,101 @@
+// Prisma schema for CV Optimizer
+// Run: npx prisma generate && npx prisma db push
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cvs              CV[]
+  jds              JD[]
+  optimizationJobs OptimizationJob[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// CV
+// ---------------------------------------------------------------------------
+model CV {
+  id           String   @id @default(cuid())
+  userId       String?  // nullable for anonymous use
+  fileName     String
+  originalText String   @db.Text
+  sections     Json     // Parsed sections: summary, experience, education, etc.
+  fileSize     Int?     // bytes
+  mimetype     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  optimizationJobs OptimizationJob[]
+
+  @@index([userId])
+  @@map("cvs")
+}
+
+// ---------------------------------------------------------------------------
+// JD (Job Description)
+// ---------------------------------------------------------------------------
+model JD {
+  id        String   @id @default(cuid())
+  userId    String?
+  text      String   @db.Text
+  analysis  Json     // Output from jdAnalyzer.analyzeJD()
+  createdAt DateTime @default(now())
+
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  optimizationJobs OptimizationJob[]
+
+  @@index([userId])
+  @@map("jds")
+}
+
+// ---------------------------------------------------------------------------
+// OptimizationJob
+// ---------------------------------------------------------------------------
+model OptimizationJob {
+  id          String              @id @default(cuid())
+  cvId        String
+  jdId        String
+  userId      String?
+  config      Json                // Optimization config: maxPages, tone, etc.
+  status      OptimizationStatus  @default(PENDING)
+  result      Json?               // { optimizedSections, atsScore, diff }
+  atsScore    Float?              // Numeric 0-100 score for quick queries
+  error       String?             @db.Text
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  cv   CV    @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  jd   JD    @relation(fields: [jdId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([cvId])
+  @@index([jdId])
+  @@index([userId])
+  @@index([status])
+  @@map("optimization_jobs")
+}
+
+enum OptimizationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
