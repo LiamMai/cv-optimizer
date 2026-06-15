@@ -149,18 +149,18 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
           <div className="grid gap-6 md:grid-cols-2">
             <ATSScoreCard score={atsScore} />
             <KeywordChips
-              matched={atsScore.coveredKeywords}
-              missing={atsScore.missingKeywords}
+              matched={atsScore.coveredKeywords ?? []}
+              missing={atsScore.missingKeywords ?? []}
             />
           </div>
 
           {/* Weak sections */}
-          {atsScore.weakSections.length > 0 && (
+          {(atsScore.weakSections?.length ?? 0) > 0 && (
             <Card>
               <CardHeader title="Sections Needing Improvement" />
               <CardContent className="pt-2 pb-4">
                 <ul className="space-y-2">
-                  {atsScore.weakSections.map((section) => (
+                  {(atsScore.weakSections ?? []).map((section) => (
                     <li key={section} className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5">
                       <AlertTriangle size={15} className="text-amber-500 shrink-0" />
                       <span className="text-sm font-medium text-amber-800 capitalize">{section}</span>
@@ -172,12 +172,12 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
           )}
 
           {/* Suggestions */}
-          {atsScore.suggestions.length > 0 && (
+          {(atsScore.suggestions?.length ?? 0) > 0 && (
             <Card>
               <CardHeader title="AI Recommendations" />
               <CardContent className="pt-2 pb-4">
                 <ul className="space-y-2">
-                  {atsScore.suggestions.map((suggestion, idx) => (
+                  {(atsScore.suggestions ?? []).map((suggestion, idx) => (
                     <li
                       key={idx}
                       className={cn(

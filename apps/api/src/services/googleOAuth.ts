@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 
-// Scopes needed for Gemini API
-const SCOPES = ['https://www.googleapis.com/auth/generative-language', 'openid', 'email', 'profile'];
+const SCOPES = ['openid', 'email', 'profile'];
 
 export function getOAuth2Client() {
   return new google.auth.OAuth2(

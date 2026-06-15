@@ -15,7 +15,6 @@ const defaultConfig: OptimizationConfig = {
   tone: 'professional',
   atsAggressiveness: 'medium',
   humanizationLevel: 'medium',
-  creativityLevel: 'medium',
 };
 
 interface CVStore {

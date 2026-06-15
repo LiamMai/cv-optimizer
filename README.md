@@ -12,16 +12,25 @@ AI-powered resume builder that tailors your CV to any job description. Parses yo
 
 ---
 
+## AI — Free Mode
+
+Uses **Google Gemini via OAuth** — sign in with Google, no API key required, no cost.
+
+> **Note:** Free tier has rate limits (1,500 requests/day). Responses may be slow or temporarily unavailable.
+
+---
+
 ## Tech Stack
 
 | Layer | Tech |
 |---|---|
 | Frontend | Next.js 14, TypeScript, TailwindCSS, Zustand, TipTap, React Hook Form |
 | Backend | Node.js, Express, TypeScript |
-| AI | Claude (`claude-sonnet-4-6`) or OpenAI (`gpt-4o`) — switchable via env |
+| AI | Google Gemini (OAuth, free tier) |
 | Database | PostgreSQL via Prisma ORM |
 | Parsers | `pdf-parse` (PDF), `mammoth` (DOCX) |
 | Export | `docx` package (DOCX), Puppeteer optional (PDF) |
+| Package manager | pnpm |
 
 ---
 
@@ -36,9 +45,9 @@ cv-optimizer/
 │   │   └── src/
 │   │       ├── config/         Env config with validation
 │   │       ├── middleware/     Multer upload, error handler
-│   │       ├── routes/         cv, jd, optimize, export
+│   │       ├── routes/         cv, jd, optimize, export, auth
 │   │       └── services/
-│   │           ├── aiProvider.ts    Claude/OpenAI factory
+│   │           ├── aiProvider.ts    Gemini OAuth provider
 │   │           ├── parser.ts        PDF/DOCX/TXT → structured sections
 │   │           ├── jdAnalyzer.ts    JD → keywords/requirements
 │   │           ├── atsScorer.ts     0–100 ATS scoring engine
@@ -75,6 +84,7 @@ cv-optimizer/
 ### Prerequisites
 
 - Node.js 20+
+- pnpm 9+
 - PostgreSQL 15+ (or Docker)
 
 ### 1. Clone & install
@@ -82,7 +92,7 @@ cv-optimizer/
 ```bash
 git clone <repo>
 cd cv-optimizer
-npm install
+pnpm install
 ```
 
 ### 2. Configure environment
@@ -100,14 +110,17 @@ Edit `apps/api/.env`:
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/cv_optimizer"
 
-# Pick one provider
-AI_PROVIDER="claude"           # or "openai"
-ANTHROPIC_API_KEY="sk-ant-..."
-OPENAI_API_KEY="sk-..."        # only needed if AI_PROVIDER=openai
-
 PORT=3001
-JWT_SECRET="change-me"
 CORS_ORIGIN="http://localhost:3000"
+
+# Google OAuth (required for Gemini free AI)
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+GOOGLE_REDIRECT_URI="http://localhost:3001/api/v1/auth/google/callback"
+
+# Session security
+ENCRYPTION_KEY=""   # 64 hex chars: openssl rand -hex 32
+SESSION_SECRET=""   # any long random string
 ```
 
 ### 3. Set up database
@@ -122,14 +135,14 @@ npx prisma generate
 
 ```bash
 # From repo root — runs both API and web concurrently
-npm run dev
+pnpm dev
 ```
 
 Or individually:
 
 ```bash
-npm run dev:api    # http://localhost:3001
-npm run dev:web    # http://localhost:3000
+pnpm dev:api    # http://localhost:3001
+pnpm dev:web    # http://localhost:3000
 ```
 
 ---
@@ -149,6 +162,15 @@ docker-compose exec api npx prisma migrate deploy
 ## API Reference
 
 All routes are prefixed with `/api/v1`.
+
+### Auth
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/auth/google` | Redirect to Google OAuth consent screen |
+| `GET` | `/auth/google/callback` | OAuth callback — sets session cookie |
+| `GET` | `/auth/me` | Current session info (never returns tokens) |
+| `DELETE` | `/auth/logout` | Destroy session |
 
 ### CV
 
@@ -198,16 +220,7 @@ All routes are prefixed with `/api/v1`.
 
 ---
 
-## AI Configuration
-
-### Provider selection
-
-Set `AI_PROVIDER` in `.env`:
-
-- `claude` → uses `claude-sonnet-4-6` (Anthropic)
-- `openai` → uses `gpt-4o` (OpenAI)
-
-### Optimization config
+## Optimization Config
 
 | Option | Values | Effect |
 |---|---|---|
@@ -281,7 +294,7 @@ OptimizationJob  id, cvId, jdId, userId?, config (JSON), status, result (JSON), 
 
 ```bash
 # Type check
-npm run type-check --workspace=apps/web
+pnpm --filter @cv-optimizer/web type-check
 cd apps/api && npx tsc --noEmit
 
 # Prisma Studio (DB browser)
@@ -300,14 +313,16 @@ cd apps/api && npx prisma generate
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `AI_PROVIDER` | Yes | `claude` | `claude` or `openai` |
-| `ANTHROPIC_API_KEY` | If claude | — | Anthropic API key |
-| `OPENAI_API_KEY` | If openai | — | OpenAI API key |
 | `PORT` | No | `3001` | API server port |
-| `JWT_SECRET` | Yes | — | Secret for JWT signing |
+| `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origin |
+| `GOOGLE_CLIENT_ID` | Yes | — | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes | — | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | No | `http://localhost:3001/api/v1/auth/google/callback` | OAuth callback URL |
+| `ENCRYPTION_KEY` | Yes | — | 64 hex chars — encrypt session tokens |
+| `SESSION_SECRET` | Yes | — | Express session signing secret |
+| `SESSION_TTL_HOURS` | No | `2` | Session lifetime in hours |
 | `UPLOAD_DIR` | No | `uploads` | Directory for temp file storage |
 | `MAX_FILE_SIZE_MB` | No | `10` | Max upload size |
-| `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origin |
 
 ### Web (`apps/web/.env`)
 

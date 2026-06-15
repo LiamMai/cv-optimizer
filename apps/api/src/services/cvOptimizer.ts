@@ -62,7 +62,8 @@ To ensure the output reads as authentic human writing and passes AI-detection to
 - Use first-person implied voice (no "I" — just action verbs: "Led a team…", "Delivered…").
 - Avoid these AI-tell phrases: "In today's fast-paced environment", "I am passionate about", "proven track record", "results-driven", "leverage synergies", "utilize", "spearhead", "champion", "adept at", "dynamic", "multifaceted", "whilst" (unless British English is appropriate).
 - Write bullet points that tell a story: Action → Context → Result (ACR format).
-- Not every bullet needs a metric — but at least 50% of experience bullets should include a quantified outcome.
+- Keep each bullet's original idea and meaning intact — your job is to re-word it using the job description's terminology, NOT to add new numbers, percentages, or metrics that aren't already there.
+- Only keep a metric if it already exists in the original bullet; never invent or estimate one.
 - Use industry-specific vocabulary naturally, as a practitioner would, not as a buzzword-dropper.
 - Occasional minor imperfections are acceptable and human (a short phrase, a pragmatic simplification) — the goal is authentic readability, not clinical perfection.
 
@@ -146,7 +147,7 @@ Rewrite the CV sections below to maximally match the target job description.
 ${sectionsBlock}
 
 ## INSTRUCTIONS
-For each section above, produce an optimised version. Follow the ACR (Action → Context → Result) format for experience bullets. Include at least 50% of bullets with quantified metrics where metrics already exist in the original.
+For each section above, produce an optimised version. Preserve the original ideas and content of every bullet — re-word them so they mirror the job description's keywords and phrasing so an ATS scan matches more of them. Do NOT add quantified metrics or percentages that are not already present in the original; keep existing numbers only.
 
 Return a JSON object where each key is the section name (lowercase, matching the sections above) and the value is the rewritten content as a plain string. Example:
 {

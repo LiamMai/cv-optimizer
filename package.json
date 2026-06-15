@@ -1,12 +1,15 @@
 {
   "name": "cv-optimizer",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/api\"",
-    "build": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "dev:api": "npm run dev --workspace=apps/api"
+    "db:up": "docker compose -f docker-compose.dev.yml up -d",
+    "db:down": "docker compose -f docker-compose.dev.yml down",
+    "db:logs": "docker compose -f docker-compose.dev.yml logs -f postgres",
+    "dev": "pnpm db:up && concurrently \"pnpm --filter @cv-optimizer/web dev\" \"pnpm --filter cv-optimizer-api dev\"",
+    "build": "pnpm --filter @cv-optimizer/web build && pnpm --filter cv-optimizer-api build",
+    "dev:web": "pnpm --filter @cv-optimizer/web dev",
+    "dev:api": "pnpm --filter cv-optimizer-api dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

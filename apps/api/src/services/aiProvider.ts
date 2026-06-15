@@ -2,8 +2,7 @@ import config from '../config';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { encrypt, decrypt } from './encryption';
-import { refreshAccessToken } from './googleOAuth';
+import { decrypt } from './encryption';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -46,14 +45,14 @@ let _openai: OpenAI | null = null;
 
 function getAnthropicClient(): Anthropic {
   if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.ai.anthropicApiKey });
+    _anthropic = new Anthropic({ apiKey: config.ai.anthropicApiKey, maxRetries: 0 });
   }
   return _anthropic;
 }
 
 function getOpenAIClient(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: config.ai.openaiApiKey });
+    _openai = new OpenAI({ apiKey: config.ai.openaiApiKey, maxRetries: 0 });
   }
   return _openai;
 }
@@ -68,7 +67,7 @@ async function callClaude(
   options: CompletionOptions
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, maxRetries: 0 });
 
   let system = '';
   const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -109,7 +108,7 @@ async function callOpenAI(
   options: CompletionOptions
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, maxRetries: 0 });
 
   const response = await client.chat.completions.create({
     model: config.ai.openaiModel,
@@ -135,7 +134,7 @@ async function callGeminiApiKey(
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
 
   // Extract system message and build contents
   const systemParts = messages.filter((m) => m.role === 'system').map((m) => m.content);
@@ -181,7 +180,7 @@ async function callGeminiOAuth(
   options: CompletionOptions
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
-  const MODEL = 'gemini-1.5-flash';
+  const MODEL = 'gemini-2.0-flash-lite';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
   // Build system instruction and user/model contents
@@ -244,10 +243,11 @@ async function callGroq(
   const client = new OpenAI({
     apiKey,
     baseURL: 'https://api.groq.com/openai/v1',
+    maxRetries: 0,
   });
 
   const response = await client.chat.completions.create({
-    model: 'llama3-70b-8192',
+    model: 'llama-3.3-70b-versatile',
     messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
     max_tokens: maxTokens,
     temperature,
@@ -281,24 +281,11 @@ export async function createCompletionFromSession(
   if (!creds) throw new Error('No AI credentials in session');
 
   if (creds.provider === 'gemini-oauth') {
-    if (!creds.encryptedAccessToken) {
-      throw new Error('Missing access token in session');
+    const serverKey = config.ai.groqApiKey;
+    if (!serverKey) {
+      throw new Error('GROQ_API_KEY is not configured on the server. Set it in your .env file.');
     }
-
-    let accessToken = decrypt(creds.encryptedAccessToken);
-
-    // Refresh if token is expiring within the next 60 seconds
-    if (creds.tokenExpiry && Date.now() > creds.tokenExpiry - 60_000) {
-      if (!creds.encryptedRefreshToken) {
-        throw new Error('Access token expired and no refresh token available. Please re-authenticate.');
-      }
-      accessToken = await refreshAccessToken(decrypt(creds.encryptedRefreshToken));
-      // Mutate session in-place so caller can save
-      creds.encryptedAccessToken = encrypt(accessToken);
-      creds.tokenExpiry = Date.now() + 3_600_000;
-    }
-
-    return callGeminiOAuth(accessToken, messages, options);
+    return callGroq(serverKey, messages, options);
   }
 
   if (!creds.encryptedApiKey) {

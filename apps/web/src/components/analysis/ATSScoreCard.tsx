@@ -72,15 +72,17 @@ export function ATSScoreCard({ score }: ATSScoreCardProps) {
         </div>
 
         {/* Sub-scores */}
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Breakdown</p>
-          <SubScoreBar label="Keyword Coverage" value={score.breakdown.keywordScore} delay={0} />
-          <SubScoreBar label="Skills Alignment" value={score.breakdown.skillScore} delay={100} />
-          <SubScoreBar label="Section Quality" value={score.breakdown.sectionScore} delay={200} />
-        </div>
+        {score.breakdown && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Breakdown</p>
+            <SubScoreBar label="Keyword Coverage" value={score.breakdown.keywordScore} delay={0} />
+            <SubScoreBar label="Skills Alignment" value={score.breakdown.skillScore} delay={100} />
+            <SubScoreBar label="Section Quality" value={score.breakdown.sectionScore} delay={200} />
+          </div>
+        )}
 
         {/* Missing keywords count */}
-        {score.missingKeywords.length > 0 && (
+        {(score.missingKeywords?.length ?? 0) > 0 && (
           <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm">
             <span className="font-semibold text-red-700">{score.missingKeywords.length}</span>
             <span className="text-red-600"> missing keywords detected</span>
@@ -88,13 +90,13 @@ export function ATSScoreCard({ score }: ATSScoreCardProps) {
         )}
 
         {/* Weak sections */}
-        {score.weakSections.length > 0 && (
+        {(score.weakSections?.length ?? 0) > 0 && (
           <div className="space-y-1.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Weak Sections
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {score.weakSections.map((section) => (
+              {(score.weakSections ?? []).map((section) => (
                 <Badge key={section} variant="warning" size="sm">
                   {section}
                 </Badge>

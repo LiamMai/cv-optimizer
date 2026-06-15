@@ -86,8 +86,8 @@ export default function EditorPage({ params }: EditorPageProps) {
   const handleExportPDF = async () => {
     setIsExportingPDF(true);
     try {
-      const blob = await exportPDF({ jobId });
-      downloadBlob(blob, 'cv-optimized.pdf');
+      const { blob, filename } = await exportPDF({ jobId });
+      downloadBlob(blob, filename);
       toast.success('PDF downloaded!');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Export failed');
@@ -99,8 +99,8 @@ export default function EditorPage({ params }: EditorPageProps) {
   const handleExportDOCX = async () => {
     setIsExportingDOCX(true);
     try {
-      const blob = await exportDOCX({ jobId });
-      downloadBlob(blob, 'cv-optimized.docx');
+      const { blob, filename } = await exportDOCX({ jobId });
+      downloadBlob(blob, filename);
       toast.success('DOCX downloaded!');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Export failed');

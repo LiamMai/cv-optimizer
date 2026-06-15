@@ -60,13 +60,7 @@ export function score(cvSections: CVSections, jdAnalysis: JDAnalysisResult): ATS
   _checkSection(cvSections, 'skills', 20, weakSections, suggestions, 'Add a skills section listing your technical and soft skills.');
   _checkSection(cvSections, 'education', 20, weakSections, suggestions, 'Add an education section.');
 
-  // Check for quantified achievements in experience
   const expText = cvSections.experience || '';
-  const hasMetrics = /\d+\s*(%|x\b|k\b|m\b|\+|\$|percent|times|hours|days|users|customers|revenue|growth)/i.test(expText);
-  if (!hasMetrics) {
-    weakSections.push('experience (no metrics)');
-    suggestions.push('Add quantified achievements to your experience (e.g., "increased revenue by 30%").');
-  }
 
   // Check for action verbs
   const actionVerbs = ['led', 'built', 'developed', 'designed', 'implemented', 'managed', 'improved',

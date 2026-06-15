@@ -177,6 +177,7 @@ async function _runOptimizationJob(
       status: 'completed',
       completedAt: new Date().toISOString(),
       result: {
+        originalSections: cvRecord.sections,
         optimizedSections: result.optimizedSections,
         atsScore: result.atsScore,
         diff: result.diff,

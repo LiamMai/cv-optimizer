@@ -26,124 +26,91 @@ interface ContactInfo {
 }
 
 // ---------------------------------------------------------------------------
-// HTML template helpers
+// PDF export — rendered with pdfkit (pure JS, no headless browser needed)
 // ---------------------------------------------------------------------------
 
-function _escapeHtml(str: string | undefined): string {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+const PDF_SECTIONS: Array<{ title: string; key: keyof CVSections; bullets: boolean }> = [
+  { title: 'Professional Summary', key: 'summary', bullets: false },
+  { title: 'Experience', key: 'experience', bullets: true },
+  { title: 'Education', key: 'education', bullets: true },
+  { title: 'Skills', key: 'skills', bullets: true },
+  { title: 'Certifications', key: 'certifications', bullets: true },
+  { title: 'Projects', key: 'projects', bullets: true },
+  { title: 'Languages', key: 'languages', bullets: true },
+  { title: 'Awards & Honours', key: 'awards', bullets: true },
+  { title: 'Publications', key: 'publications', bullets: true },
+  { title: 'Volunteer Experience', key: 'volunteer', bullets: true },
+];
+
+/** Draw a section heading with an underline rule, then its content. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _renderPdfSection(doc: any, title: string, content: string | undefined, asBullets: boolean): void {
+  if (!content || !String(content).trim()) return;
+
+  doc.moveDown(0.7);
+  doc.font('Times-Bold').fontSize(11).fillColor('#1a1a1a').text(title.toUpperCase(), { characterSpacing: 0.8 });
+  const ruleY = doc.y + 2;
+  doc
+    .moveTo(doc.page.margins.left, ruleY)
+    .lineTo(doc.page.width - doc.page.margins.right, ruleY)
+    .lineWidth(1)
+    .strokeColor('#1a1a1a')
+    .stroke();
+  doc.moveDown(0.5);
+
+  doc.font('Times-Roman').fontSize(11).fillColor('#1a1a1a');
+  if (asBullets) {
+    content
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .forEach((line) => {
+        const clean = line.replace(/^[-•*]\s*/, '');
+        doc.text(`•  ${clean}`, { indent: 8, paragraphGap: 3, lineGap: 1 });
+      });
+  } else {
+    doc.text(content, { paragraphGap: 4, lineGap: 1 });
+  }
 }
 
 /**
- * Convert newline-separated bullet text into <li> items.
- * Lines starting with - or • are treated as bullets.
- */
-function _renderBullets(text: string | undefined): string {
-  if (!text) return '';
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const items = lines.map((l) => {
-    const clean = l.replace(/^[-•*]\s*/, '');
-    return `<li>${_escapeHtml(clean)}</li>`;
-  });
-  return items.length > 0 ? `<ul>${items.join('')}</ul>` : '';
-}
-
-function _renderSection(title: string, content: string | undefined, asBullets = false): string {
-  if (!content || !String(content).trim()) return '';
-  const body = asBullets
-    ? _renderBullets(content)
-    : `<p>${_escapeHtml(content).replace(/\r?\n/g, '<br/>')}</p>`;
-  return `
-    <section>
-      <h2>${_escapeHtml(title)}</h2>
-      ${body}
-    </section>`;
-}
-
-function _buildHtml(sections: CVSections, meta: { name?: string } = {}): string {
-  const contact = (sections.contact || {}) as ContactInfo;
-  const name = _escapeHtml(contact.name || meta.name || 'Candidate');
-  const email = _escapeHtml(contact.email || '');
-  const phone = _escapeHtml(contact.phone || '');
-  const linkedin = _escapeHtml(contact.linkedin || '');
-  const location = _escapeHtml(contact.location || '');
-
-  const contactLine = [email, phone, linkedin, location].filter(Boolean).join(' &nbsp;|&nbsp; ');
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; color: #1a1a1a; line-height: 1.5; padding: 36px 48px; max-width: 860px; margin: auto; }
-  h1 { font-size: 22pt; font-weight: bold; text-align: center; margin-bottom: 4px; letter-spacing: 0.5px; }
-  .contact { text-align: center; font-size: 9pt; color: #444; margin-bottom: 18px; }
-  section { margin-bottom: 16px; page-break-inside: avoid; }
-  h2 { font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1.2px; border-bottom: 1.5px solid #1a1a1a; padding-bottom: 3px; margin-bottom: 6px; }
-  p { margin-bottom: 6px; }
-  ul { margin: 0 0 6px 18px; }
-  li { margin-bottom: 3px; }
-  @page { margin: 18mm 15mm; }
-</style>
-</head>
-<body>
-  <h1>${name}</h1>
-  ${contactLine ? `<p class="contact">${contactLine}</p>` : ''}
-  ${_renderSection('Professional Summary', sections.summary)}
-  ${_renderSection('Experience', sections.experience, true)}
-  ${_renderSection('Education', sections.education, true)}
-  ${_renderSection('Skills', sections.skills, true)}
-  ${sections.certifications ? _renderSection('Certifications', sections.certifications, true) : ''}
-  ${sections.projects ? _renderSection('Projects', sections.projects, true) : ''}
-  ${sections.languages ? _renderSection('Languages', sections.languages, true) : ''}
-  ${sections.awards ? _renderSection('Awards & Honours', sections.awards, true) : ''}
-  ${sections.publications ? _renderSection('Publications', sections.publications, true) : ''}
-  ${sections.volunteer ? _renderSection('Volunteer Experience', sections.volunteer, true) : ''}
-</body>
-</html>`;
-}
-
-// ---------------------------------------------------------------------------
-// PDF export
-// ---------------------------------------------------------------------------
-
-/**
- * Export sections to PDF.
- *
- * Tries puppeteer first. If puppeteer is unavailable, falls back to
- * returning the rendered HTML string (Buffer of UTF-8 bytes) so the
- * caller can still serve it with Content-Type: text/html.
+ * Export sections to a real PDF buffer using pdfkit.
  */
 export async function exportToPDF(sections: CVSections, meta: { name?: string } = {}): Promise<ExportResult> {
-  const html = _buildHtml(sections, meta);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+  const PDFDocument = require('pdfkit') as any;
+  const contact = (sections.contact || {}) as ContactInfo;
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-    const puppeteer = require('puppeteer') as any;
-    const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      margin: { top: '18mm', bottom: '18mm', left: '15mm', right: '15mm' },
-      printBackground: true,
-    });
-    await browser.close();
-    return { buffer: Buffer.from(pdfBuffer), mimeType: 'application/pdf', extension: 'pdf' };
-  } catch {
-    // Puppeteer not installed — return HTML as fallback
-    console.warn('[exporter] puppeteer not available, returning HTML instead of PDF.');
-    return {
-      buffer: Buffer.from(html, 'utf8'),
-      mimeType: 'text/html',
-      extension: 'html',
-    };
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: { top: 50, bottom: 50, left: 54, right: 54 },
+  });
+
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  const finished = new Promise<Buffer>((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+  });
+
+  // Header — name + contact line
+  const name = contact.name || meta.name || 'Candidate';
+  doc.font('Times-Bold').fontSize(22).fillColor('#1a1a1a').text(name, { align: 'center' });
+
+  const contactLine = [contact.email, contact.phone, contact.linkedin, contact.location]
+    .filter(Boolean)
+    .join('   |   ');
+  if (contactLine) {
+    doc.font('Times-Roman').fontSize(9).fillColor('#444').text(contactLine, { align: 'center' });
   }
+
+  for (const s of PDF_SECTIONS) {
+    _renderPdfSection(doc, s.title, sections[s.key] as string | undefined, s.bullets);
+  }
+
+  doc.end();
+  const buffer = await finished;
+  return { buffer, mimeType: 'application/pdf', extension: 'pdf' };
 }
 
 // ---------------------------------------------------------------------------

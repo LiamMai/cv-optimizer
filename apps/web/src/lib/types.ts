@@ -42,15 +42,14 @@ export interface ATSScore {
     keywordScore: number;
     skillScore: number;
     sectionScore: number;
-  };
+  } | null;
 }
 
 export interface OptimizationConfig {
   maxPages: 1 | 2 | 3;
-  tone: 'professional' | 'technical' | 'executive' | 'minimal';
+  tone: 'professional' | 'conversational' | 'executive';
   atsAggressiveness: 'low' | 'medium' | 'high';
   humanizationLevel: 'low' | 'medium' | 'high';
-  creativityLevel: 'low' | 'medium' | 'high';
 }
 
 export interface SectionDiff {
@@ -81,18 +80,14 @@ export interface OptimizationJob {
 
 export interface AuthState {
   authenticated: boolean;
-  provider?: 'gemini-oauth' | 'claude' | 'openai' | 'gemini' | 'groq';
+  provider?: 'gemini-oauth';
   user?: { email: string; name: string; picture?: string };
 }
 
-export type AIProvider = 'gemini-oauth' | 'claude' | 'openai' | 'gemini' | 'groq';
+export type AIProvider = 'gemini-oauth';
 
 export interface ProviderInfo {
   id: AIProvider;
   name: string;
   description: string;
-  free: boolean;
-  requiresKey: boolean;
-  keyPlaceholder?: string;
-  keyHint?: string;
 }

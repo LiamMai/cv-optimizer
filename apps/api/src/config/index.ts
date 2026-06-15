@@ -10,6 +10,8 @@ export interface AppConfig {
     provider: string;
     openaiApiKey: string;
     anthropicApiKey: string;
+    geminiApiKey: string;
+    groqApiKey: string;
     openaiModel: string;
     anthropicModel: string;
   };
@@ -52,6 +54,8 @@ const config: AppConfig = {
     provider: (process.env.AI_PROVIDER || 'claude').toLowerCase(),
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    groqApiKey: process.env.GROQ_API_KEY || '',
     openaiModel: 'gpt-4o',
     anthropicModel: 'claude-sonnet-4-6',
   },
