@@ -1,8 +1,9 @@
 import { google } from 'googleapis';
+import type { OAuth2Client, Credentials } from 'google-auth-library';
 
 const SCOPES = ['openid', 'email', 'profile'];
 
-export function getOAuth2Client() {
+export function getOAuth2Client(): OAuth2Client {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -18,7 +19,7 @@ export function getAuthUrl(): string {
   });
 }
 
-export async function exchangeCode(code: string) {
+export async function exchangeCode(code: string): Promise<Credentials> {
   const client = getOAuth2Client();
   const { tokens } = await client.getToken(code);
   return tokens; // { access_token, refresh_token, expiry_date }

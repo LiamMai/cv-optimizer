@@ -4,7 +4,7 @@ import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { handleUpload } from '../middleware/upload';
-import { parseFile, extractSections } from '../services/parser';
+import { parseFile, extractSections, extractPdfLinks, mergeContactLinks } from '../services/parser';
 import { createError } from '../middleware/errorHandler';
 
 const router: Router = express.Router();
@@ -75,6 +75,12 @@ router.post('/upload', handleUpload, async (req: Request, res: Response, next: N
 
     // Extract structured sections
     const sections = extractSections(rawText);
+
+    // Recover clickable link annotations that pdf-parse strips (Portfolio, LinkedIn, store links).
+    if (mimetype === 'application/pdf') {
+      const annotationUrls = await extractPdfLinks(filePath);
+      mergeContactLinks(sections, annotationUrls);
+    }
 
     // Build the CV record
     const id = uuidv4();

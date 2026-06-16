@@ -405,6 +405,46 @@ async function _callOpenAI(
 // ---------------------------------------------------------------------------
 
 /**
+ * Escape raw control characters (newlines, tabs, etc.) that appear *inside* JSON
+ * string literals. Models frequently emit multi-line string values with literal
+ * line breaks, which is invalid JSON — this repairs them so JSON.parse succeeds.
+ */
+function _escapeControlCharsInStrings(s: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = s.charCodeAt(i);
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString && code < 0x20) {
+      // Replace literal control chars with their JSON escape sequence.
+      if (ch === '\n') out += '\\n';
+      else if (ch === '\r') out += '\\r';
+      else if (ch === '\t') out += '\\t';
+      else out += '\\u' + code.toString(16).padStart(4, '0');
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
  * Utility: parse JSON from AI response, stripping markdown fences if present.
  */
 export function parseJsonResponse(text: string): unknown {
@@ -414,18 +454,25 @@ export function parseJsonResponse(text: string): unknown {
     .replace(/\s*```\s*$/, '')
     .trim();
 
-  try {
-    return JSON.parse(stripped);
-  } catch {
-    // Last-resort: find first { or [ and last } or ]
-    const start = Math.min(
-      stripped.indexOf('{') === -1 ? Infinity : stripped.indexOf('{'),
-      stripped.indexOf('[') === -1 ? Infinity : stripped.indexOf('[')
-    );
-    const end = Math.max(stripped.lastIndexOf('}'), stripped.lastIndexOf(']'));
-    if (start !== Infinity && end !== -1) {
-      return JSON.parse(stripped.slice(start, end + 1));
+  // Narrow to the JSON body (first {/[ to last }/]) so prose around it is ignored.
+  const start = Math.min(
+    stripped.indexOf('{') === -1 ? Infinity : stripped.indexOf('{'),
+    stripped.indexOf('[') === -1 ? Infinity : stripped.indexOf('[')
+  );
+  const end = Math.max(stripped.lastIndexOf('}'), stripped.lastIndexOf(']'));
+  const body = start !== Infinity && end !== -1 ? stripped.slice(start, end + 1) : stripped;
+
+  // Try strict, then narrowed, then control-char-repaired.
+  const candidates = [stripped, body, _escapeControlCharsInStrings(body)];
+  let lastErr: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      lastErr = err;
     }
-    throw new Error(`AI returned non-JSON response: ${text.slice(0, 200)}`);
   }
+  throw new Error(
+    `AI returned non-JSON response (${(lastErr as Error)?.message}): ${text.slice(0, 200)}`
+  );
 }

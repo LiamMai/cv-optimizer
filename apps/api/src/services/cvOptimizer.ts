@@ -22,6 +22,7 @@ export interface SectionDiff {
 }
 
 export interface OptimizeResult {
+  originalSections?: CVSections;
   optimizedSections: CVSections;
   atsScore: {
     baseline: ATSScoreResult;
@@ -38,7 +39,7 @@ export interface OptimizeResult {
 const DEFAULT_CONFIG: Required<OptimizeConfig> = {
   maxPages: 2,
   tone: 'professional',
-  atsAggressiveness: 'medium',
+  atsAggressiveness: 'low',
   humanizationLevel: 'high',
 };
 
@@ -55,6 +56,9 @@ Rewrite the provided CV sections so they are maximally aligned with the target j
 2. **PRESERVE FACTUAL ACCURACY** — All dates, employer names, job titles, academic institutions, and degrees must remain exactly as stated in the original.
 3. **NO KEYWORD STUFFING** — Keywords must be woven naturally into sentences. Do not create bullet points that exist solely to list keywords with no context.
 4. **HONEST FRAMING ONLY** — You may reframe, elevate, and articulate existing achievements more powerfully, but you may not exaggerate beyond what the original implies.
+5. **NO BOILERPLATE CLAUSES** — Never append generic framing tails to bullets such as "with a focus on …", "utilizing …", "incorporating …", "while implementing …", "leveraging …". These are dead giveaways of machine stuffing.
+6. **NO PHRASE REPETITION** — Do NOT reuse the same descriptive phrase across multiple bullets or sections. If a phrase already appears once, find different wording or omit it.
+7. **PRESERVE, DON'T PAD** — A bullet's optimised length must stay close to the original. Do not lengthen a bullet just to insert keywords. If a keyword does not fit a bullet honestly, leave the bullet as-is.
 
 ## HUMAN-WRITING STANDARDS
 To ensure the output reads as authentic human writing and passes AI-detection tools:
@@ -73,6 +77,16 @@ To ensure the output reads as authentic human writing and passes AI-detection to
 - Include keywords in multiple sections (Summary + Skills + Experience) for higher ATS weight.
 - Use both spelled-out and abbreviated forms when introducing technical terms (e.g., "Continuous Integration/Continuous Deployment (CI/CD)").
 - Skills section should list technologies/tools as they appear in the JD (capitalisation matters: "React.js" not "reactjs").
+
+## BEST-PRACTICE CV STRUCTURE (follow the standard reverse-chronological format)
+- **Reverse-chronological ordering**: within Experience and Projects, order entries from most recent to oldest (current/ongoing role first, "Present" before any past dates). Reorder if the original wasn't already sorted — but never alter the dates themselves.
+- Keep each entry's header line intact: "<Company> / <Role>" (or project name) followed by its date range, then its bullets. Do not merge entries or move bullets between entries.
+- **Lead bullets with strong past-tense action verbs** (Built, Led, Designed, Shipped, Migrated, Reduced…); the current role may use present tense. Avoid weak openers ("Responsible for", "Worked on", "Helped with").
+- Order the bullets within each role by impact — most significant/relevant achievement first.
+- Summary: 2–4 tight sentences — seniority + years + core stack + domain strengths, tuned to the JD.
+- Skills: grouped by category, most JD-relevant categories first.
+- Standard section order for a reverse-chronological CV: Summary → Skills → Experience → Projects → Education (and any extras last). Education stays after experience for an experienced candidate.
+- One idea per bullet; keep bullets concise and parallel in grammatical structure.
 
 ## OUTPUT FORMAT
 Return a single JSON object with a key for each section you rewrote. Each section value is a plain string (not nested JSON). Preserve the original section structure — do not add sections that didn't exist in the original CV.`;
@@ -148,6 +162,10 @@ ${sectionsBlock}
 
 ## INSTRUCTIONS
 For each section above, produce an optimised version. Preserve the original ideas and content of every bullet — re-word them so they mirror the job description's keywords and phrasing so an ATS scan matches more of them. Do NOT add quantified metrics or percentages that are not already present in the original; keep existing numbers only.
+
+Critically: do NOT append generic tails like "with a focus on cloud-based applications and front-end technologies" or "utilizing design patterns and semantic HTML" to bullets, and do NOT repeat any phrase across bullets. Keep each optimised bullet roughly the same length as the original. The candidate's facts — companies, roles, dates, team sizes, tech stacks, project names — must come through unchanged.
+
+For Experience and Projects, output entries in reverse-chronological order (most recent first; ongoing "Present" roles before past ones) and start each bullet with a strong action verb. Keep every entry's header (company/role/project + date range) on its own line, immediately followed by that entry's bullets — never reorder bullets across different entries.
 
 Return a JSON object where each key is the section name (lowercase, matching the sections above) and the value is the rewritten content as a plain string. Example:
 {
