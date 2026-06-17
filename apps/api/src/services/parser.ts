@@ -225,6 +225,26 @@ function _looksLikeTitle(line: string): boolean {
 }
 
 /**
+ * Pull the location segment out of a contact line. The line is split on the common
+ * separators (•, |, ·) and the segment that is neither an email, phone, nor URL — but
+ * does contain letters — is treated as the location ("Tan Binh dist, HCMC, VietNam").
+ */
+function _extractLocationFromLine(line: string): string {
+  const segments = line.split(/\s*[•|·]\s*/).map((s) => s.trim()).filter(Boolean);
+  for (const seg of segments) {
+    if (/[@]/.test(seg)) continue; // email
+    if (/https?:\/\//i.test(seg)) continue; // url
+    const digits = seg.replace(/\D/g, '');
+    if (digits.length >= 7) continue; // phone
+    if (!/[A-Za-zÀ-ÿ]/.test(seg)) continue; // must have letters
+    if (_NAME_BLOCKLIST.test(seg)) continue; // not a role/section word
+    if (seg.length > 60) continue;
+    return seg;
+  }
+  return '';
+}
+
+/**
  * Attempt to extract the candidate's name and contact info from the first few lines.
  * pdf-parse can reflow text out of visual order, so the name is NOT reliably line 0 —
  * we score the first lines with a name heuristic instead.
@@ -249,6 +269,13 @@ function _extractContact(lines: string[]): ContactInfo {
     if (phoneMatch && !contact.phone) {
       const digits = phoneMatch[1].replace(/\D/g, '');
       if (digits.length >= 7 && digits.length <= 15) contact.phone = phoneMatch[1].trim();
+    }
+
+    // Location — a contact line carries it alongside phone/email, separated by •|·,
+    // e.g. "Tan Binh dist, HCMC, VietNam • +84 368197963 • email@x.com".
+    if (!contact.location && (emailMatch || phoneMatch)) {
+      const loc = _extractLocationFromLine(line);
+      if (loc) contact.location = loc;
     }
 
     // Name — first line in the header block that looks like a person's name.
@@ -333,6 +360,89 @@ export function mergeContactLinks(sections: CVSections, urls: string[]): void {
   _mergeLinks(sections.contact as unknown as ContactInfo, urls);
 }
 
+export interface LinkAnchor {
+  url: string;
+  text: string;
+}
+
+/**
+ * Extract clickable link annotations together with the visible anchor text they cover,
+ * by intersecting each Link annotation's rectangle with the page's text items. Lets us
+ * preserve in-body links (e.g. "Google Play", "AppStore") that have no visible URL.
+ * Returns [] for non-PDFs or on any failure — best-effort.
+ */
+export async function extractPdfLinkAnchors(filePath: string): Promise<LinkAnchor[]> {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const data = new Uint8Array(await fs.readFile(filePath));
+    const doc = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+    const anchors: LinkAnchor[] = [];
+
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const annotations = (await page.getAnnotations({ intent: 'display' })) as Array<{
+        subtype?: string; url?: string; unsafeUrl?: string; rect?: number[];
+      }>;
+      const linkAnns = annotations.filter((a) => a.subtype === 'Link' && (a.url || a.unsafeUrl) && a.rect);
+      if (!linkAnns.length) continue;
+
+      const content = await page.getTextContent();
+      const items = (content.items as Array<{ str: string; transform: number[]; width?: number }>).filter(
+        (it) => typeof it.str === 'string' && it.str.length > 0
+      );
+
+      for (const ann of linkAnns) {
+        const [x1, y1, x2, y2] = ann.rect as number[];
+        const loX = Math.min(x1, x2) - 1;
+        const hiX = Math.max(x1, x2) + 1;
+        const loY = Math.min(y1, y2) - 2;
+        const hiY = Math.max(y1, y2) + 2;
+        const covered = items
+          .filter((it) => {
+            const ix = it.transform[4];
+            const iy = it.transform[5];
+            const iw = it.width || 0;
+            // Item overlaps the annotation box horizontally and sits within its vertical band.
+            return ix + iw > loX && ix < hiX && iy >= loY && iy <= hiY;
+          })
+          .sort((a, b) => a.transform[4] - b.transform[4])
+          .map((it) => it.str)
+          .join('')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .replace(/^[•·|,;:\s]+|[•·|,;:\s]+$/g, ''); // strip surrounding separators
+        const url = (ann.url || ann.unsafeUrl || '').replace(/[.,;:]+$/, '');
+        if (url && covered) anchors.push({ url, text: covered });
+      }
+    }
+
+    await doc.destroy();
+    return anchors;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Embed annotation links into the raw text as markdown ([anchor](url)) so they survive
+ * section extraction and AI rewriting, and can be rendered clickable on export.
+ * Replaces the first un-linked occurrence of each anchor's text.
+ */
+export function injectLinkAnchors(text: string, anchors: LinkAnchor[]): string {
+  let out = text;
+  for (const { url, text: anchor } of anchors) {
+    if (!anchor || anchor.length < 2) continue;
+    if (/^https?:\/\//i.test(anchor)) continue; // visible URL already linkifies on render
+    const esc = anchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Match the anchor only when not already wrapped in markdown link syntax.
+    const re = new RegExp(`(?<!\\]\\()(?<!\\[)${esc}(?!\\]\\()(?!\\]\\s*\\()`, '');
+    if (re.test(out)) {
+      out = out.replace(re, `[${anchor}](${url})`);
+    }
+  }
+  return out;
+}
+
 /**
  * Split raw text into named CV sections.
  */
@@ -357,6 +467,7 @@ export function extractSections(text: string): CVSections {
   sections.contact = _extractContact(lines) as unknown as Record<string, string>;
 
   let currentSection: string | null = null;
+  let seenKnown = false; // have we passed the contact header into a real section yet?
   const buffer: Record<string, string[]> = {};
 
   for (const line of lines) {
@@ -364,19 +475,25 @@ export function extractSections(text: string): CVSections {
 
     if (sectionKey && sectionKey !== '__heading__') {
       currentSection = sectionKey;
+      seenKnown = true;
       if (!buffer[currentSection]) buffer[currentSection] = [];
       continue; // Don't include the heading itself in the content
     }
 
     if (sectionKey === '__heading__') {
-      // Unknown heading - close current section, start "other" accumulation
-      // Only switch if not already in a known section
-      if (!currentSection) {
+      // Unknown heading. Before any known section this is the contact header (NAME, role,
+      // contact line) — already parsed into `contact`, so skip it rather than dumping it
+      // into "other" (which surfaced personal info under an ADDITIONAL section). Only route
+      // genuinely unknown content to "other" once we're past the header.
+      if (seenKnown && !currentSection) {
         currentSection = 'other';
         if (!buffer[currentSection]) buffer[currentSection] = [];
       }
       continue;
     }
+
+    // Skip body lines that precede the first known section (the contact header block).
+    if (!seenKnown) continue;
 
     if (currentSection) {
       if (!buffer[currentSection]) buffer[currentSection] = [];

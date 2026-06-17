@@ -4,7 +4,14 @@ import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { handleUpload } from '../middleware/upload';
-import { parseFile, extractSections, extractPdfLinks, mergeContactLinks } from '../services/parser';
+import {
+  parseFile,
+  extractSections,
+  extractPdfLinks,
+  extractPdfLinkAnchors,
+  injectLinkAnchors,
+  mergeContactLinks,
+} from '../services/parser';
 import { createError } from '../middleware/errorHandler';
 
 const router: Router = express.Router();
@@ -73,12 +80,20 @@ router.post('/upload', handleUpload, async (req: Request, res: Response, next: N
       throw createError(422, 'The uploaded file appears to be empty or contains too little text.');
     }
 
+    // Recover clickable link annotations that pdf-parse strips, embedding in-body links
+    // (e.g. "Google Play", "AppStore") as markdown so they survive into the sections.
+    let annotationUrls: string[] = [];
+    if (mimetype === 'application/pdf') {
+      annotationUrls = await extractPdfLinks(filePath);
+      const anchors = await extractPdfLinkAnchors(filePath);
+      if (anchors.length) rawText = injectLinkAnchors(rawText, anchors);
+    }
+
     // Extract structured sections
     const sections = extractSections(rawText);
 
-    // Recover clickable link annotations that pdf-parse strips (Portfolio, LinkedIn, store links).
-    if (mimetype === 'application/pdf') {
-      const annotationUrls = await extractPdfLinks(filePath);
+    // Merge clickable link annotations into the contact buckets (Portfolio, LinkedIn, store links).
+    if (annotationUrls.length) {
       mergeContactLinks(sections, annotationUrls);
     }
 

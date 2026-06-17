@@ -32,13 +32,13 @@ interface ContactInfo {
   [key: string]: string | undefined;
 }
 
-// Clickable link buckets rendered under the contact line, in display order.
+// Personal contact links rendered under the name, in display order. Store links
+// (Google Play / App Store) are product links, NOT personal info — they belong in the
+// relevant Project entry, not the header — so they're intentionally excluded here.
 const LINK_FIELDS: Array<{ key: keyof ContactInfo; label: string }> = [
   { key: 'portfolio', label: 'Portfolio' },
   { key: 'linkedin', label: 'LinkedIn' },
   { key: 'github', label: 'GitHub' },
-  { key: 'playStore', label: 'Google Play' },
-  { key: 'appStore', label: 'App Store' },
   { key: 'website', label: 'Website' },
 ];
 
@@ -68,6 +68,11 @@ function _coalesceLines(content: string): string[] {
     }
   }
   return out;
+}
+
+/** Flatten markdown links to "text (url)" for the plain-text pdfkit fallback renderer. */
+function _mdToPlain(s: string): string {
+  return String(s).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)');
 }
 
 /** A line inside Experience/Projects that names a role, company, or date range — rendered bold, no bullet. */
@@ -116,7 +121,8 @@ function _renderPdfSection(doc: any, title: string, content: string | undefined,
   doc.font('Helvetica').fontSize(10.5).fillColor('#1a1a1a');
   if (asBullets) {
     _coalesceLines(content)
-      .forEach((line) => {
+      .forEach((rawLine) => {
+        const line = _mdToPlain(rawLine);
         const clean = line.replace(/^[-•*]\s*/, '');
         if (_isEntryHeader(line)) {
           // Role / company / date lines stand out — bold, flush left, small gap above.
@@ -129,7 +135,7 @@ function _renderPdfSection(doc: any, title: string, content: string | undefined,
       });
   } else {
     // Non-bullet block (e.g. Summary): collapse hard line-wraps into one flowing paragraph.
-    const para = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(' ');
+    const para = _mdToPlain(content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(' '));
     doc.text(para, { align: 'justify', paragraphGap: 4, lineGap: 1.5 });
   }
 }
@@ -227,6 +233,30 @@ function _esc(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
+// Markdown link [text](url) or a bare http(s) URL. Used to render in-body links clickable.
+const INLINE_LINK = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)<]+)/g;
+
+/** Escape text while turning markdown links and bare URLs into clickable <a> tags. */
+function _inlineHtml(s: string): string {
+  const src = String(s);
+  let out = '';
+  let last = 0;
+  let m: RegExpExecArray | null;
+  INLINE_LINK.lastIndex = 0;
+  while ((m = INLINE_LINK.exec(src)) !== null) {
+    out += _esc(src.slice(last, m.index));
+    if (m[1]) {
+      out += `<a href="${_esc(m[2])}">${_esc(m[1])}</a>`;
+    } else {
+      const url = m[3].replace(/[.,;:]+$/, '');
+      out += `<a href="${_esc(url)}">${_esc(url)}</a>`;
+    }
+    last = m.index + m[0].length;
+  }
+  out += _esc(src.slice(last));
+  return out;
+}
+
 /**
  * Render an entry-style section (Experience/Projects). Each entry — its bold header
  * (with right-aligned date) plus all of its bullets — is wrapped in an `.entry-block`
@@ -251,9 +281,9 @@ function _htmlEntries(content: string): string {
       const m = clean.match(DATE_RANGE);
       if (m) {
         const left = clean.slice(0, m.index).trim();
-        out.push(`<div class="entry"><span class="entry-title">${_esc(left)}</span><span class="entry-date">${_esc(m[1])}</span></div>`);
+        out.push(`<div class="entry"><span class="entry-title">${_inlineHtml(left)}</span><span class="entry-date">${_esc(m[1])}</span></div>`);
       } else {
-        out.push(`<div class="entry"><span class="entry-title">${_esc(clean)}</span></div>`);
+        out.push(`<div class="entry"><span class="entry-title">${_inlineHtml(clean)}</span></div>`);
       }
     } else {
       if (!openUl) { out.push('<ul>'); openUl = true; }
@@ -261,9 +291,9 @@ function _htmlEntries(content: string): string {
         const idx = clean.indexOf(':');
         const label = clean.slice(0, idx + 1);
         const rest = clean.slice(idx + 1);
-        out.push(`<li><strong>${_esc(label)}</strong>${_esc(rest)}</li>`);
+        out.push(`<li><strong>${_esc(label)}</strong>${_inlineHtml(rest)}</li>`);
       } else {
-        out.push(`<li>${_esc(clean)}</li>`);
+        out.push(`<li>${_inlineHtml(clean)}</li>`);
       }
     }
   }
@@ -271,21 +301,39 @@ function _htmlEntries(content: string): string {
   return out.join('\n');
 }
 
+/**
+ * A run-on "Cat A: …. Cat B: …. Cat C: …" blob (common in AI-expanded Skills) reads as one
+ * giant bullet. Split it into one item per category so each is a clean, scannable line.
+ */
+function _splitCategoryRun(line: string): string[] {
+  // Break before a Title-case label + colon that follows the end of the previous value
+  // (a period/semicolon or just whitespace). Labels are 1–4 capitalised words (& / allowed).
+  const marked = line.replace(
+    /([.;])\s+(?=[A-Z][A-Za-z0-9.+#]*(?:[ &/]+[A-Z][A-Za-z0-9.+#]*){0,3}:\s)/g,
+    (_m, punct) => `${punct}\n`
+  );
+  const parts = marked.split('\n').map((p) => p.trim().replace(/^[.;,\s]+/, '')).filter(Boolean);
+  // Only treat as categories if at least two labelled segments emerged.
+  const labelled = parts.filter((p) => /^[A-Z][A-Za-z0-9 .+#&/]{0,38}:\s/.test(p));
+  return labelled.length >= 2 ? parts : [line];
+}
+
 /** Render a simple bullet list (Skills/Education/etc.), bolding "Label:" prefixes. */
 function _htmlList(content: string): string {
-  const items = _coalesceLines(content).map((line) => {
-    const clean = line.replace(/^[-•*]\s*/, '').trim();
-    const m = clean.match(/^([A-Z][A-Za-z &/]{0,30}):\s*(.*)$/);
-    if (m) return `<li><strong>${_esc(m[1])}:</strong> ${_esc(m[2])}</li>`;
-    return `<li>${_esc(clean)}</li>`;
-  });
+  const items = _coalesceLines(content)
+    .flatMap((line) => _splitCategoryRun(line.replace(/^[-•*]\s*/, '').trim()))
+    .map((clean) => {
+      const m = clean.match(/^([A-Z][A-Za-z &/]{0,30}):\s*(.*)$/);
+      if (m) return `<li><strong>${_esc(m[1])}:</strong> ${_inlineHtml(m[2])}</li>`;
+      return `<li>${_inlineHtml(clean)}</li>`;
+    });
   return `<ul>\n${items.join('\n')}\n</ul>`;
 }
 
 /** Render a justified paragraph (Summary). */
 function _htmlParagraph(content: string): string {
   const para = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(' ');
-  return `<p class="summary">${_esc(para)}</p>`;
+  return `<p class="summary">${_inlineHtml(para)}</p>`;
 }
 
 /** Build the full HTML document for a CV. */
@@ -325,6 +373,7 @@ function _buildCvHtml(sections: CVSections, meta: { name?: string }): string {
   .links { text-align: center; font-size: 0.95rem; margin-top: 0.26em; }
   .links a { color: #1155cc; text-decoration: underline; }
   .links .sep { color: #999; margin: 0 0.6em; }
+  section a { color: #1155cc; text-decoration: underline; }
   section { margin-top: 1.15em; }
   /* Keep a heading with the content that follows it; otherwise let sections flow across pages. */
   h2 { font-size: 1.1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
@@ -337,10 +386,12 @@ function _buildCvHtml(sections: CVSections, meta: { name?: string }): string {
   li { position: relative; padding-left: 1.3em; margin-bottom: 0.32em; text-align: justify;
        orphans: 2; widows: 2; }
   li::before { content: "•"; position: absolute; left: 0.15em; color: #1a1a1a; }
-  /* Keep a whole entry (header + all its bullets) together on one page. */
-  .entry-block { break-inside: avoid; page-break-inside: avoid; }
+  /* Let a long entry break across pages (so it fills the page instead of jumping whole and
+     leaving a gap), but never strand the header alone — it stays glued to its first bullet. */
+  .entry-block { break-inside: auto; page-break-inside: auto; }
   .entry { display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.7em; margin-bottom: 0.15em;
            break-inside: avoid; page-break-inside: avoid; break-after: avoid; page-break-after: avoid; }
+  .entry-block > ul > li:first-child { break-before: avoid; page-break-before: avoid; }
   .entry-title { font-weight: 700; }
   .entry-date { font-weight: 700; white-space: nowrap; padding-left: 1em; }
 </style></head>
@@ -377,10 +428,11 @@ async function _measureBottom(page: any): Promise<number> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const atoms: Array<{ top: number; height: number; atomic: boolean }> = await page.evaluate(() => {
     const doc = (globalThis as any).document;
-    // Atomic = must not split: header, headings, entry blocks, and standalone list items
-    // (skills/education). p.summary is breakable (long paragraph may flow across pages).
+    // Atomic = must not split: page header, section headings, entry header lines, and list
+    // items (entry bullets + skills/education). Entry blocks now break across pages, so each
+    // bullet is its own atom. p.summary is breakable (long paragraph may flow across pages).
     const els = Array.from(
-      doc.querySelectorAll('header, h2, p.summary, .entry-block, section > ul > li')
+      doc.querySelectorAll('header, h2, p.summary, .entry, li')
     ) as any[];
     return els.map((el) => {
       const r = el.getBoundingClientRect();
@@ -591,6 +643,34 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     });
   }
 
+  // Split text into Word runs, turning markdown links / bare URLs into clickable hyperlinks.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function inlineRuns(text: string, opts: { bold?: boolean }): any[] {
+    const runs: any[] = [];
+    let last = 0;
+    let m: RegExpExecArray | null;
+    INLINE_LINK.lastIndex = 0;
+    const pushText = (t: string) => {
+      if (t) runs.push(new TextRun({ text: t, size: 20, bold: opts.bold, font: 'Arial' }));
+    };
+    while ((m = INLINE_LINK.exec(text)) !== null) {
+      pushText(text.slice(last, m.index));
+      const label = m[1] || m[3];
+      const url = (m[2] || m[3]).replace(/[.,;:]+$/, '');
+      runs.push(
+        new ExternalHyperlink({
+          link: url,
+          children: [
+            new TextRun({ text: label, size: 20, color: '1155CC', font: 'Arial', underline: { type: UnderlineType.SINGLE } }),
+          ],
+        })
+      );
+      last = m.index + m[0].length;
+    }
+    pushText(text.slice(last));
+    return runs.length ? runs : [new TextRun({ text, size: 20, bold: opts.bold, font: 'Arial' })];
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function textToParagraphs(text: string | undefined): any[] {
     if (!text) return [];
@@ -601,7 +681,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
         const header = _isEntryHeader(line);
         return new Paragraph({
           bullet: isBullet && !header ? { level: 0 } : undefined,
-          children: [new TextRun({ text: clean, size: 20, bold: header, font: 'Arial' })],
+          children: inlineRuns(clean, { bold: header }),
           spacing: { after: 60 },
         });
       });

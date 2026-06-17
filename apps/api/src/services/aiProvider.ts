@@ -37,6 +37,57 @@ export interface SessionCredentials {
 }
 
 // ---------------------------------------------------------------------------
+// Retry / timeout policy
+// ---------------------------------------------------------------------------
+
+/** Per-request timeout for a single AI call attempt (ms). */
+const AI_TIMEOUT_MS = 120_000;
+/** Number of extra attempts after the first on transient failures. */
+const AI_MAX_RETRIES = 3;
+/** Base backoff between attempts (ms); grows exponentially. */
+const AI_RETRY_BASE_MS = 1_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Decide whether an error is worth retrying (network blips, timeouts, 429, 5xx). */
+function _isRetryable(err: unknown): boolean {
+  const e = err as { status?: number; name?: string; code?: string; message?: string };
+  if (e?.status && (e.status === 408 || e.status === 409 || e.status === 429 || e.status >= 500)) {
+    return true;
+  }
+  if (e?.name === 'AbortError') return true;
+  const code = e?.code || '';
+  if (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) {
+    return true;
+  }
+  const msg = (e?.message || '').toLowerCase();
+  return msg.includes('timeout') || msg.includes('timed out') || msg.includes('network');
+}
+
+/**
+ * Run an AI call with retries on transient failures and exponential backoff.
+ * Non-retryable errors (auth, bad request) throw immediately.
+ */
+async function _withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === AI_MAX_RETRIES || !_isRetryable(err)) break;
+      const delay = AI_RETRY_BASE_MS * 2 ** attempt;
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[aiProvider] ${label} attempt ${attempt + 1} failed (${(err as Error)?.message}); retrying in ${delay}ms`
+      );
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
+// ---------------------------------------------------------------------------
 // Singleton clients for env-based providers
 // ---------------------------------------------------------------------------
 
@@ -45,14 +96,14 @@ let _openai: OpenAI | null = null;
 
 function getAnthropicClient(): Anthropic {
   if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.ai.anthropicApiKey, maxRetries: 0 });
+    _anthropic = new Anthropic({ apiKey: config.ai.anthropicApiKey, maxRetries: 0, timeout: AI_TIMEOUT_MS });
   }
   return _anthropic;
 }
 
 function getOpenAIClient(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: config.ai.openaiApiKey, maxRetries: 0 });
+    _openai = new OpenAI({ apiKey: config.ai.openaiApiKey, maxRetries: 0, timeout: AI_TIMEOUT_MS });
   }
   return _openai;
 }
@@ -67,7 +118,7 @@ async function callClaude(
   options: CompletionOptions
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
-  const client = new Anthropic({ apiKey, maxRetries: 0 });
+  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: AI_TIMEOUT_MS });
 
   let system = '';
   const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -87,7 +138,7 @@ async function callClaude(
   };
   if (system) params.system = system;
 
-  const response = await client.messages.create(params);
+  const response = await _withRetry('claude', () => client.messages.create(params));
   const content = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
     .map((block) => block.text)
@@ -108,14 +159,16 @@ async function callOpenAI(
   options: CompletionOptions
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
-  const client = new OpenAI({ apiKey, maxRetries: 0 });
+  const client = new OpenAI({ apiKey, maxRetries: 0, timeout: AI_TIMEOUT_MS });
 
-  const response = await client.chat.completions.create({
-    model: config.ai.openaiModel,
-    messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-    max_tokens: maxTokens,
-    temperature,
-  });
+  const response = await _withRetry('openai', () =>
+    client.chat.completions.create({
+      model: config.ai.openaiModel,
+      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      max_tokens: maxTokens,
+      temperature,
+    })
+  );
 
   const choice = response.choices[0];
   return {
@@ -161,7 +214,7 @@ async function callGeminiApiKey(
     (requestConfig as any).systemInstruction = systemInstruction;
   }
 
-  const result = await model.generateContent(requestConfig);
+  const result = await _withRetry('gemini', () => model.generateContent(requestConfig));
   const response = result.response;
   const text = response.text();
 
@@ -204,21 +257,33 @@ async function callGeminiOAuth(
     };
   }
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const data = await _withRetry('gemini-oauth', async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Gemini OAuth API error ${resp.status}: ${errText}`);
-  }
+    if (!resp.ok) {
+      const errText = await resp.text();
+      const e = new Error(`Gemini OAuth API error ${resp.status}: ${errText}`) as Error & { status?: number };
+      e.status = resp.status;
+      throw e;
+    }
 
-  const data = (await resp.json()) as {
+    return resp.json();
+  }) as {
     candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
   };
@@ -244,14 +309,17 @@ async function callGroq(
     apiKey,
     baseURL: 'https://api.groq.com/openai/v1',
     maxRetries: 0,
+    timeout: AI_TIMEOUT_MS,
   });
 
-  const response = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-    max_tokens: maxTokens,
-    temperature,
-  });
+  const response = await _withRetry('groq', () =>
+    client.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      max_tokens: maxTokens,
+      temperature,
+    })
+  );
 
   const choice = response.choices[0];
   return {
@@ -361,7 +429,7 @@ async function _callAnthropic(
     params.system = system;
   }
 
-  const response = await client.messages.create(params);
+  const response = await _withRetry('claude', () => client.messages.create(params));
 
   const content = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
@@ -383,12 +451,14 @@ async function _callOpenAI(
 ): Promise<CompletionResult> {
   const client = getOpenAIClient();
 
-  const response = await client.chat.completions.create({
-    model: config.ai.openaiModel,
-    messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-    max_tokens: maxTokens,
-    temperature,
-  });
+  const response = await _withRetry('openai', () =>
+    client.chat.completions.create({
+      model: config.ai.openaiModel,
+      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      max_tokens: maxTokens,
+      temperature,
+    })
+  );
 
   const choice = response.choices[0];
   return {
