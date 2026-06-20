@@ -1,113 +1,88 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   FileDown,
   FileText,
   ArrowLeft,
-  LayoutPanelLeft,
-  CheckCircle,
+  Columns2,
+  CheckCheck,
+  X,
+  Eye,
+  GitCompare,
 } from 'lucide-react';
 import { useCVStore } from '@/store/cvStore';
 import { pollJobStatus, exportPDF, exportDOCX } from '@/lib/api';
-import { CVEditor } from '@/components/editor/CVEditor';
-import { SuggestionsPanel } from '@/components/editor/SuggestionsPanel';
+import { SectionDiff } from '@/components/editor/SectionDiff';
+import {
+  CvPage,
+  FormattedCv,
+  FormattedBlocks,
+  SectionHeading,
+  sectionLabel,
+  sortByPdfOrder,
+} from '@/components/editor/CvPaper';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { CircularProgressWithCenter } from '@/components/ui/CircularProgress';
-import type { CVSection } from '@/lib/types';
-import { cn, downloadBlob } from '@/lib/utils';
+import type { CVSection, SectionDiff as SectionDiffData } from '@/lib/types';
+import type { DiffDecision } from '@/lib/diff';
+import { diffBlocks, resolveBlocks, blockHunkIds, type BlockOp } from '@/lib/blockDiff';
+import { formatSection } from '@/lib/cvFormat';
+import { downloadBlob, cn } from '@/lib/utils';
 
 interface EditorPageProps {
   params: { jobId: string };
 }
 
-const SECTION_ORDER = ['summary', 'experience', 'skills', 'education', 'projects', 'certifications'];
-
-function getSectionLabel(type: string): string {
-  const map: Record<string, string> = {
-    summary: 'Summary',
-    experience: 'Experience',
-    skills: 'Skills',
-    education: 'Education',
-    projects: 'Projects',
-    certifications: 'Certs',
-  };
-  return map[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
-}
-
-function sortSections(sections: CVSection[]): CVSection[] {
-  return [...sections].sort((a, b) => {
-    const ai = SECTION_ORDER.indexOf(a.type);
-    const bi = SECTION_ORDER.indexOf(b.type);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
-}
+type RightView = 'review' | 'preview';
 
 export default function EditorPage({ params }: EditorPageProps) {
   const { jobId } = params;
-  const { optimizationJob, updateOptimizationJob, acceptDiff, rejectDiff, acceptedDiffs } =
-    useCVStore();
+  const {
+    optimizationJob,
+    updateOptimizationJob,
+    diffDecisions,
+    setDiffDecision,
+    setManyDecisions,
+  } = useCVStore();
 
-  const [activeSection, setActiveSection] = useState<string>('');
-  const [sectionContents, setSectionContents] = useState<Record<string, string>>({});
+  const [rightView, setRightView] = useState<RightView>('review');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingDOCX, setIsExportingDOCX] = useState(false);
 
   const job = optimizationJob?.id === jobId ? optimizationJob : null;
 
-  // Fetch job if not in store
   useEffect(() => {
     if (!job && jobId) {
       pollJobStatus(jobId).then(updateOptimizationJob).catch(() => {});
     }
   }, [job, jobId, updateOptimizationJob]);
 
-  // Initialize section contents from optimized (or original) sections
-  useEffect(() => {
-    if (!job?.result) return;
-    const sections = sortSections(job.result.optimizedSections);
-    const initial: Record<string, string> = {};
-    for (const s of sections) {
-      initial[s.type] = s.content;
-    }
-    setSectionContents(initial);
-    if (!activeSection && sections.length > 0) {
-      setActiveSection(sections[0].type);
-    }
-  }, [job?.result, activeSection]);
+  // Block-level diff ops per changed section (structured: bullets/entries/paragraph).
+  const opsBySection = useMemo<Record<string, BlockOp[]>>(() => {
+    const out: Record<string, BlockOp[]> = {};
+    const diffs: SectionDiffData[] = job?.result?.diff ?? [];
+    for (const d of diffs) out[d.sectionType] = diffBlocks(d.sectionType, d.original, d.optimized);
+    return out;
+  }, [job?.result?.diff]);
 
-  const handleSectionChange = useCallback((type: string, html: string) => {
-    setSectionContents((prev) => ({ ...prev, [type]: html }));
-  }, []);
+  const allHunkIds = useMemo<string[]>(() => {
+    const ids: string[] = [];
+    for (const ops of Object.values(opsBySection)) ids.push(...blockHunkIds(ops));
+    return ids;
+  }, [opsBySection]);
 
-  const handleExportPDF = async () => {
-    setIsExportingPDF(true);
-    try {
-      const { blob, filename } = await exportPDF({ jobId });
-      downloadBlob(blob, filename);
-      toast.success('PDF downloaded!');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setIsExportingPDF(false);
-    }
-  };
-
-  const handleExportDOCX = async () => {
-    setIsExportingDOCX(true);
-    try {
-      const { blob, filename } = await exportDOCX({ jobId });
-      downloadBlob(blob, filename);
-      toast.success('DOCX downloaded!');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setIsExportingDOCX(false);
-    }
-  };
+  // Resolved sections (decisions applied) — used by the preview + export.
+  const resolvedSections = useMemo<CVSection[]>(() => {
+    const sections = job?.result?.optimizedSections ?? [];
+    return sections.map((s) => {
+      const ops = opsBySection[s.type];
+      return ops ? { ...s, content: resolveBlocks(ops, diffDecisions) } : s;
+    });
+  }, [job?.result?.optimizedSections, opsBySection, diffDecisions]);
 
   if (!job) {
     return (
@@ -131,15 +106,49 @@ export default function EditorPage({ params }: EditorPageProps) {
     );
   }
 
-  const { optimizedSections, diff, atsScore } = job.result;
-  const sortedSections = sortSections(optimizedSections);
-  const acceptedCount = acceptedDiffs.length;
-  const totalDiffs = diff.length;
+  const { originalSections, optimizedSections, diff, atsScore, contact } = job.result;
+  const sortedOptimized = sortByPdfOrder(optimizedSections);
+
+  const totalHunks = allHunkIds.length;
+  const resolvedHunks = allHunkIds.filter((id) => diffDecisions[id]).length;
+  const allResolved = totalHunks > 0 && resolvedHunks === totalHunks;
+
+  const bulkDecide = (decision: DiffDecision) => {
+    const map: Record<string, DiffDecision> = {};
+    for (const id of allHunkIds) map[id] = decision;
+    setManyDecisions(map);
+  };
+
+  // Only sections with a rejected hunk need a content override for export.
+  const buildSectionOverrides = (): Record<string, string> => {
+    const overrides: Record<string, string> = {};
+    for (const [sectionType, ops] of Object.entries(opsBySection)) {
+      if (ops.some((o) => o.id && diffDecisions[o.id] === 'rejected')) {
+        overrides[sectionType] = resolveBlocks(ops, diffDecisions);
+      }
+    }
+    return overrides;
+  };
+
+  const handleExport = async (kind: 'pdf' | 'docx') => {
+    const setLoading = kind === 'pdf' ? setIsExportingPDF : setIsExportingDOCX;
+    const run = kind === 'pdf' ? exportPDF : exportDOCX;
+    setLoading(true);
+    try {
+      const { blob, filename } = await run({ jobId, sections: buildSectionOverrides() });
+      downloadBlob(blob, filename);
+      toast.success(`${kind.toUpperCase()} downloaded!`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="flex h-[calc(100vh-57px)] flex-col overflow-hidden bg-slate-50">
+    <div className="flex h-[calc(100vh-57px)] flex-col overflow-hidden bg-slate-100">
       {/* Top bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
         <div className="flex items-center gap-3">
           <Link href={`/analysis/${jobId}`}>
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
@@ -148,13 +157,12 @@ export default function EditorPage({ params }: EditorPageProps) {
           </Link>
           <div className="h-4 w-px bg-slate-200" />
           <div className="flex items-center gap-2">
-            <LayoutPanelLeft size={16} className="text-slate-400" />
-            <span className="text-sm font-semibold text-slate-700">CV Editor</span>
+            <Columns2 size={16} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-700">Review Changes</span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* ATS score badge */}
           {atsScore && (
             <div className="hidden items-center gap-2 sm:flex">
               <CircularProgressWithCenter score={atsScore.score} size={40} strokeWidth={5} />
@@ -165,109 +173,108 @@ export default function EditorPage({ params }: EditorPageProps) {
             </div>
           )}
 
-          {/* Progress */}
-          <Badge variant={acceptedCount === totalDiffs ? 'success' : 'neutral'}>
-            <CheckCircle size={11} />
-            {acceptedCount}/{totalDiffs} sections
+          <Badge variant={allResolved ? 'success' : 'neutral'}>
+            <CheckCheck size={11} />
+            {resolvedHunks}/{totalHunks} changes
           </Badge>
 
+          {totalHunks > 0 && (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" icon={<CheckCheck size={14} />} onClick={() => bulkDecide('accepted')}>
+                Accept all
+              </Button>
+              <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={() => bulkDecide('rejected')}>
+                Reject all
+              </Button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={isExportingDOCX}
-              icon={<FileText size={14} />}
-              onClick={handleExportDOCX}
-            >
+            <Button variant="secondary" size="sm" loading={isExportingDOCX} icon={<FileText size={14} />} onClick={() => handleExport('docx')}>
               DOCX
             </Button>
-            <Button
-              size="sm"
-              loading={isExportingPDF}
-              icon={<FileDown size={14} />}
-              onClick={handleExportPDF}
-            >
+            <Button size="sm" loading={isExportingPDF} icon={<FileDown size={14} />} onClick={() => handleExport('pdf')}>
               PDF
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Section tabs */}
-      <div className="shrink-0 border-b border-slate-200 bg-white px-4 sm:px-6">
-        <div className="flex items-center gap-0 overflow-x-auto scrollbar-thin -mb-px">
-          {sortedSections.map((section) => {
-            const isAccepted = acceptedDiffs.includes(section.type);
-            const hasDiff = diff.some((d) => d.sectionType === section.type);
-            return (
+      {/* Two-column split */}
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        {/* Left — original uploaded CV */}
+        <div className="flex w-full flex-col overflow-hidden border-b border-slate-200 lg:w-1/2 lg:border-b-0 lg:border-r">
+          <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">Uploaded CV</h3>
+            <p className="text-xs text-slate-400">Your original document</p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
+            <CvPage contact={contact}>
+              <FormattedCv sections={originalSections} />
+            </CvPage>
+          </div>
+        </div>
+
+        {/* Right — optimized CV */}
+        <div className="flex w-full flex-col overflow-hidden lg:w-1/2">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-5 py-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700">Optimized CV</h3>
+              <p className="text-xs text-slate-400">
+                {rightView === 'review' ? 'Accept or reject each change' : 'Final result preview'}
+              </p>
+            </div>
+            {/* View toggle */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium">
               <button
-                key={section.type}
-                onClick={() => setActiveSection(section.type)}
+                onClick={() => setRightView('review')}
                 className={cn(
-                  'flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap',
-                  activeSection === section.type
-                    ? 'border-primary-600 text-primary-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  'flex items-center gap-1 rounded-md px-2.5 py-1.5 transition-colors',
+                  rightView === 'review' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 )}
               >
-                {getSectionLabel(section.type)}
-                {hasDiff && (
-                  <span
-                    className={cn(
-                      'flex h-1.5 w-1.5 rounded-full',
-                      isAccepted ? 'bg-green-500' : 'bg-amber-400'
-                    )}
-                  />
-                )}
+                <GitCompare size={13} /> Review
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main editor area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Editor — 60% */}
-        <div className="flex flex-col w-3/5 overflow-y-auto border-r border-slate-200 bg-white p-6 scrollbar-thin">
-          {activeSection && (
-            <>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-slate-800 capitalize">
-                  {getSectionLabel(activeSection)}
-                </h2>
-                {acceptedDiffs.includes(activeSection) && (
-                  <Badge variant="success" size="sm">
-                    <CheckCircle size={10} />
-                    Accepted
-                  </Badge>
+              <button
+                onClick={() => setRightView('preview')}
+                className={cn(
+                  'flex items-center gap-1 rounded-md px-2.5 py-1.5 transition-colors',
+                  rightView === 'preview' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 )}
-              </div>
-              <CVEditor
-                key={activeSection}
-                content={sectionContents[activeSection] ?? ''}
-                onChange={(html) => handleSectionChange(activeSection, html)}
-                editable
-                placeholder={`Write or edit your ${getSectionLabel(activeSection)} section…`}
-              />
-            </>
-          )}
-        </div>
-
-        {/* Suggestions panel — 40% */}
-        <div className="flex w-2/5 flex-col overflow-hidden bg-slate-50">
-          <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
-            <h3 className="text-sm font-semibold text-slate-700">AI Suggestions</h3>
-            <p className="text-xs text-slate-400">Review changes for the active section</p>
+              >
+                <Eye size={13} /> Preview
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            {activeSection && (
-              <SuggestionsPanel
-                diffs={diff}
-                currentSection={activeSection}
-                onAccept={acceptDiff}
-                onReject={rejectDiff}
-                acceptedDiffs={acceptedDiffs}
-              />
+          <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
+            {rightView === 'preview' ? (
+              <CvPage contact={contact}>
+                <FormattedCv sections={resolvedSections} />
+              </CvPage>
+            ) : (
+              <CvPage contact={contact}>
+                {sortedOptimized.map((section) => {
+                  const ops = opsBySection[section.type];
+                  const hasDiff = diff.some((d) => d.sectionType === section.type);
+                  return (
+                    <section key={section.type}>
+                      <SectionHeading>
+                        {sectionLabel(section.type)}
+                        {hasDiff && (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-700">
+                            edited
+                          </span>
+                        )}
+                      </SectionHeading>
+                      {ops && hasDiff ? (
+                        <SectionDiff ops={ops} decisions={diffDecisions} onDecide={setDiffDecision} />
+                      ) : (
+                        <FormattedBlocks blocks={formatSection(section.type, section.content)} />
+                      )}
+                    </section>
+                  );
+                })}
+              </CvPage>
             )}
           </div>
         </div>
