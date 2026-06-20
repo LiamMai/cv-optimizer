@@ -12,11 +12,26 @@ AI-powered resume builder that tailors your CV to any job description. Parses yo
 
 ---
 
-## AI — Free Mode
+## AI Providers
 
-Uses **Google Gemini via OAuth** — sign in with Google, no API key required, no cost.
+Pick how the AI runs from the **Connect Provider** screen. Three ways:
 
-> **Note:** Free tier has rate limits (1,500 requests/day). Responses may be slow or temporarily unavailable.
+| Mode | How | Setup |
+|---|---|---|
+| **Free AI** (default) | Keyless. Runs on the server's shared Groq key — no sign-in, no API key. Choose a model in the picker. | Server needs `GROQ_API_KEY` |
+| **Google (Gemini)** | OAuth — sign in with Google, free tier (1,500 req/day). | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
+| **Bring your own key** | Paste an API key for Anthropic Claude, OpenAI, Google Gemini, or Groq. Key is encrypted into your session, never stored. | none |
+
+**Free AI models** (`groq-free`):
+
+| Model | Notes |
+|---|---|
+| `llama-3.3-70b-versatile` | Default — best quality |
+| `llama-3.1-8b-instant` | Fastest |
+| `openai/gpt-oss-120b` | — |
+| `openai/gpt-oss-20b` | — |
+
+> **Note:** Free/OAuth tiers have rate limits. Responses may be slow or temporarily unavailable under load.
 
 ---
 
@@ -26,10 +41,10 @@ Uses **Google Gemini via OAuth** — sign in with Google, no API key required, n
 |---|---|
 | Frontend | Next.js 14, TypeScript, TailwindCSS, Zustand, TipTap, React Hook Form |
 | Backend | Node.js, Express, TypeScript |
-| AI | Google Gemini (OAuth, free tier) |
+| AI | Anthropic Claude, OpenAI, Google Gemini, Groq — selectable per session |
 | Database | PostgreSQL via Prisma ORM |
-| Parsers | `pdf-parse` (PDF), `mammoth` (DOCX) |
-| Export | `docx` package (DOCX), Puppeteer optional (PDF) |
+| Parsers | `pdf-parse` + `pdfjs-dist` (PDF), `mammoth` (DOCX) |
+| Export | `puppeteer` (PDF, HTML→Chromium template; `pdfkit` fallback), `docx` (DOCX), `archiver` |
 | Package manager | pnpm |
 
 ---
@@ -47,12 +62,14 @@ cv-optimizer/
 │   │       ├── middleware/     Multer upload, error handler
 │   │       ├── routes/         cv, jd, optimize, export, auth
 │   │       └── services/
-│   │           ├── aiProvider.ts    Gemini OAuth provider
+│   │           ├── aiProvider.ts    Multi-provider AI dispatch (Claude/OpenAI/Gemini/Groq + keyless groq-free)
+│   │           ├── googleOAuth.ts   Google OAuth flow
+│   │           ├── encryption.ts    AES encrypt/decrypt for session-held keys
 │   │           ├── parser.ts        PDF/DOCX/TXT → structured sections
 │   │           ├── jdAnalyzer.ts    JD → keywords/requirements
 │   │           ├── atsScorer.ts     0–100 ATS scoring engine
 │   │           ├── cvOptimizer.ts   Core AI rewriter + master prompt
-│   │           └── exporter.ts      PDF/DOCX export
+│   │           └── exporter.ts      PDF (Chromium/pdfkit) / DOCX export
 │   └── web/                    Next.js frontend
 │       └── src/
 │           ├── app/
@@ -63,11 +80,13 @@ cv-optimizer/
 │           ├── components/
 │           │   ├── ui/           Button, Card, Badge, CircularProgress
 │           │   ├── upload/       FileDropzone
-│           │   ├── editor/       CVEditor (TipTap), SuggestionsPanel
+│           │   ├── editor/       CVEditor (TipTap), SuggestionsPanel, split-diff view
 │           │   ├── analysis/     ATSScoreCard, KeywordChips
+│           │   ├── auth/         ProviderCard, ConnectProviderModal (provider + model picker)
 │           │   └── layout/       Navbar with step indicator
 │           ├── lib/
 │           │   ├── api.ts        Typed axios API client
+│           │   ├── providers.ts  AI provider/model catalog for the picker
 │           │   ├── types.ts      All TypeScript interfaces
 │           │   └── utils.ts      cn, formatFileSize, score color helpers
 │           └── store/
@@ -113,7 +132,16 @@ DATABASE_URL="postgresql://user:password@localhost:5432/cv_optimizer"
 PORT=3001
 CORS_ORIGIN="http://localhost:3000"
 
-# Google OAuth (required for Gemini free AI)
+# Free AI (keyless "Free AI" mode) — server's shared Groq key
+GROQ_API_KEY="..."
+
+# Optional: env-default provider for the deprecated keyless createCompletion path
+AI_PROVIDER="claude"          # claude | openai
+ANTHROPIC_API_KEY="..."       # bring-your-own keys are normally sent per-session,
+OPENAI_API_KEY="..."          # not via env — these are only for the env fallback
+GEMINI_API_KEY="..."
+
+# Google OAuth (only needed for the "Sign in with Google / Gemini" mode)
 GOOGLE_CLIENT_ID="..."
 GOOGLE_CLIENT_SECRET="..."
 GOOGLE_REDIRECT_URI="http://localhost:3001/api/v1/auth/google/callback"
@@ -122,6 +150,8 @@ GOOGLE_REDIRECT_URI="http://localhost:3001/api/v1/auth/google/callback"
 ENCRYPTION_KEY=""   # 64 hex chars: openssl rand -hex 32
 SESSION_SECRET=""   # any long random string
 ```
+
+> Bring-your-own API keys are submitted at runtime via `POST /auth/api-key`, encrypted with `ENCRYPTION_KEY`, and held only in the session. The `*_API_KEY` env vars above feed only the legacy env-based fallback.
 
 ### 3. Set up database
 
@@ -167,9 +197,11 @@ All routes are prefixed with `/api/v1`.
 
 | Method | Path | Description |
 |---|---|---|
+| `POST` | `/auth/free` | Connect keyless Free AI (`groq-free`); body `{ model? }` |
+| `POST` | `/auth/api-key` | Connect a provider with your own key; body `{ provider, apiKey }` (provider: `claude`/`openai`/`gemini`/`groq`) |
 | `GET` | `/auth/google` | Redirect to Google OAuth consent screen |
 | `GET` | `/auth/google/callback` | OAuth callback — sets session cookie |
-| `GET` | `/auth/me` | Current session info (never returns tokens) |
+| `GET` | `/auth/me` | Current session info: `{ provider, model? }` (never returns tokens/keys) |
 | `DELETE` | `/auth/logout` | Destroy session |
 
 ### CV
@@ -315,8 +347,13 @@ cd apps/api && npx prisma generate
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `PORT` | No | `3001` | API server port |
 | `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origin |
-| `GOOGLE_CLIENT_ID` | Yes | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | — | Google OAuth client secret |
+| `GROQ_API_KEY` | For Free AI | — | Server's shared Groq key powering keyless `groq-free` mode |
+| `AI_PROVIDER` | No | `claude` | Env-fallback provider (`claude`/`openai`) for legacy `createCompletion` |
+| `ANTHROPIC_API_KEY` | No | — | Env fallback only — BYO keys are sent per-session |
+| `OPENAI_API_KEY` | No | — | Env fallback only |
+| `GEMINI_API_KEY` | No | — | Env fallback only |
+| `GOOGLE_CLIENT_ID` | For Google sign-in | — | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | For Google sign-in | — | Google OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | No | `http://localhost:3001/api/v1/auth/google/callback` | OAuth callback URL |
 | `ENCRYPTION_KEY` | Yes | — | 64 hex chars — encrypt session tokens |
 | `SESSION_SECRET` | Yes | — | Express session signing secret |
