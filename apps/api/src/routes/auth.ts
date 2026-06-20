@@ -1,6 +1,8 @@
 import express, { Router, Request, Response, NextFunction } from 'express';
 import { getAuthUrl, exchangeCode, getUserInfo } from '../services/googleOAuth';
 import { encrypt } from '../services/encryption';
+import { FREE_MODELS, DEFAULT_FREE_MODEL } from '../services/aiProvider';
+import config from '../config';
 
 const router: Router = express.Router();
 
@@ -103,6 +105,36 @@ router.post('/api-key', express.json(), async (req: Request, res: Response, next
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/v1/auth/free — connect the free, keyless provider (server Groq key)
+// ---------------------------------------------------------------------------
+router.post('/free', express.json(), (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!config.ai.groqApiKey) {
+      return res.status(503).json({
+        error: 'Free AI unavailable',
+        message: 'The server is not configured for free AI. Set GROQ_API_KEY or use an API key.',
+      });
+    }
+
+    const { model } = req.body as { model?: string };
+    const selectedModel =
+      model && (FREE_MODELS as readonly string[]).includes(model) ? model : DEFAULT_FREE_MODEL;
+
+    (req.session as any).credentials = {
+      provider: 'groq-free',
+      model: selectedModel,
+    };
+
+    req.session.save((err) => {
+      if (err) return next(err);
+      res.json({ success: true, provider: 'groq-free', model: selectedModel });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/v1/auth/logout — destroy session
 // ---------------------------------------------------------------------------
 router.delete('/logout', (req: Request, res: Response, next: NextFunction) => {
@@ -118,7 +150,7 @@ router.delete('/logout', (req: Request, res: Response, next: NextFunction) => {
 // ---------------------------------------------------------------------------
 router.get('/me', (req: Request, res: Response) => {
   const creds = (req.session as any).credentials as
-    | { provider: string }
+    | { provider: string; model?: string }
     | undefined;
   const user = (req.session as any).user as
     | { email: string; name: string; picture?: string }
@@ -131,6 +163,7 @@ router.get('/me', (req: Request, res: Response) => {
   const response: Record<string, unknown> = {
     authenticated: true,
     provider: creds.provider,
+    model: creds.model,
   };
 
   if (user) {

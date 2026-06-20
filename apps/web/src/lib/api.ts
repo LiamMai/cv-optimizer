@@ -168,4 +168,8 @@ export const logout = (): Promise<void> =>
 export const getGoogleAuthUrl = (): string =>
   `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/auth/google`;
 
+// Connect the free, keyless Pollinations provider with a chosen model.
+export const connectFree = (model: string): Promise<{ provider: string; model: string }> =>
+  api.post('/auth/free', { model }).then((r) => r.data);
+
 export default api;

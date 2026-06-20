@@ -27,6 +27,7 @@ const providerLabels: Record<string, string> = {
   openai: 'GPT-4o',
   gemini: 'Gemini',
   groq: 'Groq',
+  'groq-free': 'Free AI',
 };
 
 function getActiveStep(pathname: string): number {

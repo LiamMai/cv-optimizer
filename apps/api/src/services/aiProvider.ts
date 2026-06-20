@@ -29,12 +29,27 @@ export interface CompletionResult {
 }
 
 export interface SessionCredentials {
-  provider: 'gemini-oauth' | 'claude' | 'openai' | 'gemini' | 'groq';
+  provider: 'gemini-oauth' | 'claude' | 'openai' | 'gemini' | 'groq' | 'groq-free';
   encryptedApiKey?: string;
   encryptedAccessToken?: string;
   encryptedRefreshToken?: string;
   tokenExpiry?: number;
+  /** User-selected model id (used by the keyless `groq-free` provider). */
+  model?: string;
 }
+
+/**
+ * Free, keyless models exposed in the model picker. These run on the server's
+ * shared Groq key (no per-user API key, no sign-in) — reliable and fast, unlike
+ * the anonymous public endpoints which rate-limit and truncate long JSON output.
+ */
+export const FREE_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+] as const;
+export const DEFAULT_FREE_MODEL = 'llama-3.3-70b-versatile';
 
 // ---------------------------------------------------------------------------
 // Retry / timeout policy
@@ -302,7 +317,8 @@ async function callGeminiOAuth(
 async function callGroq(
   apiKey: string,
   messages: Message[],
-  options: CompletionOptions
+  options: CompletionOptions,
+  model: string = 'llama-3.3-70b-versatile'
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
   const client = new OpenAI({
@@ -314,7 +330,7 @@ async function callGroq(
 
   const response = await _withRetry('groq', () =>
     client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model,
       messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
       max_tokens: maxTokens,
       temperature,
@@ -348,12 +364,15 @@ export async function createCompletionFromSession(
   const creds = sessionData.credentials;
   if (!creds) throw new Error('No AI credentials in session');
 
-  if (creds.provider === 'gemini-oauth') {
+  // Keyless free providers run on the server's shared Groq key.
+  if (creds.provider === 'gemini-oauth' || creds.provider === 'groq-free') {
     const serverKey = config.ai.groqApiKey;
     if (!serverKey) {
       throw new Error('GROQ_API_KEY is not configured on the server. Set it in your .env file.');
     }
-    return callGroq(serverKey, messages, options);
+    const model =
+      creds.provider === 'groq-free' && creds.model ? creds.model : 'llama-3.3-70b-versatile';
+    return callGroq(serverKey, messages, options, model);
   }
 
   if (!creds.encryptedApiKey) {

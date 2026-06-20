@@ -94,14 +94,25 @@ export interface OptimizationJob {
 
 export interface AuthState {
   authenticated: boolean;
-  provider?: 'gemini-oauth';
+  provider?: AIProvider;
+  model?: string;
   user?: { email: string; name: string; picture?: string };
 }
 
-export type AIProvider = 'gemini-oauth';
+export type AIProvider = 'gemini-oauth' | 'groq-free';
+
+export interface AIModelOption {
+  id: string;
+  name: string;
+}
 
 export interface ProviderInfo {
   id: AIProvider;
   name: string;
   description: string;
+  free?: boolean;
+  /** True if no sign-in / API key is required. */
+  keyless?: boolean;
+  /** Selectable models for this provider (model picker). */
+  models?: AIModelOption[];
 }
