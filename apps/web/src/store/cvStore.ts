@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ParsedCV, JDAnalysis, OptimizationJob, OptimizationConfig } from '@/lib/types';
+import type { DiffDecision } from '@/lib/diff';
 
 interface JDState {
   id: string;
@@ -22,15 +23,18 @@ interface CVStore {
   jd: JDState | null;
   optimizationJob: OptimizationJob | null;
   config: OptimizationConfig;
-  acceptedDiffs: string[];
+  /** Per-hunk decisions keyed by diff hunk id (`${sectionType}#${index}`). */
+  diffDecisions: Record<string, DiffDecision>;
 
   // Actions
   setCv: (cv: ParsedCV) => void;
   setJd: (jd: JDState) => void;
   setOptimizationJob: (job: OptimizationJob) => void;
   updateOptimizationJob: (updates: Partial<OptimizationJob>) => void;
-  acceptDiff: (sectionType: string) => void;
-  rejectDiff: (sectionType: string) => void;
+  /** Set or toggle-off a hunk decision; passing the current value clears it (back to pending). */
+  setDiffDecision: (hunkId: string, decision: DiffDecision) => void;
+  setManyDecisions: (decisions: Record<string, DiffDecision>) => void;
+  clearDecisions: () => void;
   setConfig: (config: Partial<OptimizationConfig>) => void;
   reset: () => void;
 }
@@ -42,13 +46,13 @@ export const useCVStore = create<CVStore>()(
       jd: null,
       optimizationJob: null,
       config: defaultConfig,
-      acceptedDiffs: [],
+      diffDecisions: {},
 
       setCv: (cv) => set({ cv }),
 
       setJd: (jd) => set({ jd }),
 
-      setOptimizationJob: (job) => set({ optimizationJob: job, acceptedDiffs: [] }),
+      setOptimizationJob: (job) => set({ optimizationJob: job, diffDecisions: {} }),
 
       updateOptimizationJob: (updates) =>
         set((state) => ({
@@ -57,17 +61,21 @@ export const useCVStore = create<CVStore>()(
             : null,
         })),
 
-      acceptDiff: (sectionType) =>
+      setDiffDecision: (hunkId, decision) =>
         set((state) => {
-          const already = state.acceptedDiffs.includes(sectionType);
-          if (already) return state;
-          return { acceptedDiffs: [...state.acceptedDiffs, sectionType] };
+          const next = { ...state.diffDecisions };
+          if (next[hunkId] === decision) {
+            delete next[hunkId]; // toggle off → back to pending
+          } else {
+            next[hunkId] = decision;
+          }
+          return { diffDecisions: next };
         }),
 
-      rejectDiff: (sectionType) =>
-        set((state) => ({
-          acceptedDiffs: state.acceptedDiffs.filter((s) => s !== sectionType),
-        })),
+      setManyDecisions: (decisions) =>
+        set((state) => ({ diffDecisions: { ...state.diffDecisions, ...decisions } })),
+
+      clearDecisions: () => set({ diffDecisions: {} }),
 
       setConfig: (config) =>
         set((state) => ({ config: { ...state.config, ...config } })),
@@ -78,7 +86,7 @@ export const useCVStore = create<CVStore>()(
           jd: null,
           optimizationJob: null,
           config: defaultConfig,
-          acceptedDiffs: [],
+          diffDecisions: {},
         }),
     }),
     {
@@ -88,7 +96,7 @@ export const useCVStore = create<CVStore>()(
         jd: state.jd,
         optimizationJob: state.optimizationJob,
         config: state.config,
-        acceptedDiffs: state.acceptedDiffs,
+        diffDecisions: state.diffDecisions,
       }),
     }
   )

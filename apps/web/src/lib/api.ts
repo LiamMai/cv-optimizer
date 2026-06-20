@@ -94,10 +94,15 @@ export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
         accepted: false,
       }));
 
+    const contact =
+      (data.result.optimizedSections?.contact as Record<string, string> | undefined) ??
+      (data.result.originalSections?.contact as Record<string, string> | undefined);
+
     job.result = {
       originalSections,
       optimizedSections,
       diff,
+      contact,
       atsScore: {
         score: ats.score ?? 0,
         matchPercent: ats.matchPercent ?? 0,
@@ -127,14 +132,21 @@ function _filenameFromResponse(headers: Record<string, unknown>, fallback: strin
   return match ? decodeURIComponent(match[1]) : fallback;
 }
 
-export async function exportPDF(payload: { cvId?: string; jobId?: string }): Promise<ExportFile> {
+export interface ExportPayload {
+  cvId?: string;
+  jobId?: string;
+  /** Per-section content overrides (e.g. sections with rejected changes). */
+  sections?: Record<string, string>;
+}
+
+export async function exportPDF(payload: ExportPayload): Promise<ExportFile> {
   const response = await api.post('/export/pdf', payload, {
     responseType: 'blob',
   });
   return { blob: response.data, filename: _filenameFromResponse(response.headers, 'cv-optimized.pdf') };
 }
 
-export async function exportDOCX(payload: { cvId?: string; jobId?: string }): Promise<ExportFile> {
+export async function exportDOCX(payload: ExportPayload): Promise<ExportFile> {
   const response = await api.post('/export/docx', payload, {
     responseType: 'blob',
   });

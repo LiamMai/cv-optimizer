@@ -15,6 +15,9 @@ const ExportSchema = z.object({
   // Provide either a cvId (for raw/original CV) or a jobId (for optimized CV)
   cvId: z.string().uuid().optional(),
   jobId: z.string().uuid().optional(),
+  // Optional per-section content overrides (e.g. sections with rejected changes).
+  // Keys are section types (summary, experience, …); only applied with a jobId.
+  sections: z.record(z.string()).optional(),
 }).refine((d) => d.cvId || d.jobId, {
   message: 'Provide either cvId (original CV) or jobId (optimized CV result).',
 });
@@ -27,7 +30,7 @@ interface ResolvedSections {
 /**
  * Resolve the CV sections from either a cvId or jobId.
  */
-function _resolveSections(body: { cvId?: string; jobId?: string }): ResolvedSections {
+function _resolveSections(body: { cvId?: string; jobId?: string; sections?: Record<string, string> }): ResolvedSections {
   if (body.jobId) {
     const job = jobStore.get(body.jobId);
     if (!job) throw createError(404, `Optimization job "${body.jobId}" not found.`);
@@ -36,7 +39,15 @@ function _resolveSections(body: { cvId?: string; jobId?: string }): ResolvedSect
     }
     const cvRecord = cvStore.get(job.cvId);
     const baseName = cvRecord ? cvRecord.fileName.replace(/\.[^.]+$/, '') : 'cv';
-    return { sections: job.result!.optimizedSections as unknown as CVSections, fileName: `${baseName}_optimized` };
+    // Start from the optimized sections, then apply any per-section overrides
+    // the client sent (sections where the user rejected one or more changes).
+    const sections = { ...(job.result!.optimizedSections as unknown as CVSections) };
+    if (body.sections) {
+      for (const [key, value] of Object.entries(body.sections)) {
+        (sections as Record<string, unknown>)[key] = value;
+      }
+    }
+    return { sections, fileName: `${baseName}_optimized` };
   }
 
   if (body.cvId) {

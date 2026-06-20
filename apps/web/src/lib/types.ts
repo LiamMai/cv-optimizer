@@ -59,11 +59,25 @@ export interface SectionDiff {
   accepted: boolean;
 }
 
+export interface CVContact {
+  name?: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  website?: string;
+  [key: string]: string | undefined;
+}
+
 export interface OptimizationResult {
   originalSections: CVSection[];
   optimizedSections: CVSection[];
   atsScore: ATSScore;
   diff: SectionDiff[];
+  contact?: CVContact;
 }
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
