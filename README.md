@@ -9,6 +9,8 @@ AI-powered resume builder that tailors your CV to any job description. Parses yo
 3. **AI Optimization** — Rewrites bullet points and sections to match the JD while keeping your original layout intact. Enforces human-like writing, no hallucination, measurable achievements.
 4. **ATS Score** — 0–100 score with keyword gap analysis and section-by-section breakdown.
 5. **Edit & Export** — TipTap rich-text editor with accept/reject per-section diffs. Export to PDF or DOCX.
+6. **Modify from your data** — Skip the JD: hand the AI free-form notes (new role, fresh metrics, projects to drop) and it folds them into the right sections, mirrors existing entry structure, re-sorts by date, and asks follow-up questions where your notes are too thin. Returns the same accept/reject diff as optimization.
+7. **History** — Every job is remembered locally (company, job title, ATS score, date) so you can re-open past results and track which companies you've applied to.
 
 ---
 
@@ -60,7 +62,7 @@ cv-optimizer/
 │   │   └── src/
 │   │       ├── config/         Env config with validation
 │   │       ├── middleware/     Multer upload, error handler
-│   │       ├── routes/         cv, jd, optimize, export, auth
+│   │       ├── routes/         cv, jd, optimize, modify, export, auth
 │   │       └── services/
 │   │           ├── aiProvider.ts    Multi-provider AI dispatch (Claude/OpenAI/Gemini/Groq + keyless groq-free)
 │   │           ├── googleOAuth.ts   Google OAuth flow
@@ -69,6 +71,7 @@ cv-optimizer/
 │   │           ├── jdAnalyzer.ts    JD → keywords/requirements
 │   │           ├── atsScorer.ts     0–100 ATS scoring engine
 │   │           ├── cvOptimizer.ts   Core AI rewriter + master prompt
+│   │           ├── cvModifier.ts    Fold user notes into CV (no JD); changes/removed/needsMoreInfo
 │   │           └── exporter.ts      PDF (Chromium/pdfkit) / DOCX export
 │   └── web/                    Next.js frontend
 │       └── src/
@@ -76,7 +79,9 @@ cv-optimizer/
 │           │   ├── page.tsx              Dashboard
 │           │   ├── upload/page.tsx       Upload CV + JD
 │           │   ├── analysis/[jobId]/     ATS score + keyword gaps
-│           │   └── editor/[jobId]/       CV editor + AI suggestions
+│           │   ├── editor/[jobId]/       CV editor + AI suggestions
+│           │   ├── modify/              Modify-from-notes wizard (page.tsx + [cvId]/)
+│           │   └── history/page.tsx     Past jobs (company, role, ATS score)
 │           ├── components/
 │           │   ├── ui/           Button, Card, Badge, CircularProgress
 │           │   ├── upload/       FileDropzone
@@ -90,7 +95,8 @@ cv-optimizer/
 │           │   ├── types.ts      All TypeScript interfaces
 │           │   └── utils.ts      cn, formatFileSize, score color helpers
 │           └── store/
-│               └── cvStore.ts    Zustand store with localStorage persist
+│               ├── cvStore.ts    Zustand store with localStorage persist
+│               └── historyStore.ts  Applied-jobs history (localStorage: cv-optimizer-history)
 └── packages/
     └── shared/                 Shared TypeScript types
         └── src/types.ts        CVSection, JDAnalysis, ATSScore, etc.
@@ -228,6 +234,23 @@ All routes are prefixed with `/api/v1`.
 | `POST` | `/optimize` | Start optimization job — returns `{ jobId }` immediately |
 | `GET` | `/optimize/:jobId` | Poll job status and result |
 
+### Modify (from user data, no JD)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/modify` | Start a "modify CV from notes" job — returns `{ jobId }`; poll via `GET /optimize/:jobId` |
+
+**POST `/modify` body:**
+```json
+{
+  "cvId": "...",
+  "userData": "Free-form notes: new role, fresh metrics, projects to drop…",
+  "config": { "maxPages": 2, "tone": "professional" }
+}
+```
+
+Runs async in the **shared `jobStore`**, so the existing `GET /optimize/:jobId` poll, the diff editor, and export all work unchanged. The result adds `kind: 'modify'`, `changes[]` (what the AI edited), `removed[]` (dropped/recommended-to-drop content), and `needsMoreInfo[]` (`{ section, question }` follow-ups where notes were too thin). `tone`: `professional` / `conversational` / `executive`; `maxPages` 1–4.
+
 **POST `/optimize` body:**
 ```json
 {
@@ -293,7 +316,7 @@ Returns: `coveredKeywords`, `missingKeywords`, `weakSections`, `suggestions`.
 | Endpoint group | Limit |
 |---|---|
 | All routes | 100 requests / 15 min |
-| `/jd`, `/optimize` (AI routes) | 10 requests / min |
+| `/jd`, `/optimize`, `/modify` (AI routes) | 10 requests / min |
 
 ---
 
