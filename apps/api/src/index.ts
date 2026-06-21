@@ -17,6 +17,7 @@ import { sessionMiddleware } from './middleware/sessionConfig';
 import cvRouter from './routes/cv';
 import jdRouter from './routes/jd';
 import optimizeRouter from './routes/optimize';
+import modifyRouter from './routes/modify';
 import exportRouter from './routes/export';
 import authRouter from './routes/auth';
 
@@ -88,6 +89,7 @@ app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/cv', cvRouter);
 app.use('/api/v1/jd', aiLimiter, jdRouter);
 app.use('/api/v1/optimize', aiLimiter, optimizeRouter);
+app.use('/api/v1/modify', aiLimiter, modifyRouter); // modify CV from user-provided data
 app.use('/api/v1/export', exportRouter);
 
 // 404 handler for unknown routes

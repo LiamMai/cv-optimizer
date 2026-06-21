@@ -24,13 +24,24 @@ export interface SectionDiff {
 export interface OptimizeResult {
   originalSections?: CVSections;
   optimizedSections: CVSections;
-  atsScore: {
+  // Present for JD-optimisation jobs; omitted for "modify" jobs (no JD).
+  atsScore?: {
     baseline: ATSScoreResult;
     optimized: ATSScoreResult;
     improvement: number;
   };
   diff: Record<string, SectionDiff>;
   config: Required<OptimizeConfig>;
+  // --- "Modify CV from user data" jobs only ---
+  kind?: 'optimize' | 'modify';
+  /** Human-readable summary of each edit the AI made. */
+  changes?: string[];
+  /** Content the AI dropped or recommends dropping (user confirms via reject). */
+  removed?: string[];
+  /** Follow-up questions where the user's data was too thin to write a strong bullet. */
+  needsMoreInfo?: Array<{ section: string; question: string }>;
+  /** The raw notes the user submitted — echoed back so the editor can append for a re-run. */
+  userData?: string;
 }
 
 /**

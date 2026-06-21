@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Upload, BarChart2, Download, Zap, Shield, FileText, Sparkles } from 'lucide-react';
+import { ArrowRight, Upload, BarChart2, Download, Zap, Shield, FileText, Sparkles, Wand2 } from 'lucide-react';
 import { useCVStore } from '@/store/cvStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -102,6 +102,13 @@ export default function HomePage() {
               </Button>
             </Link>
           )}
+          {cv && (
+            <Link href={`/modify/${cv.id}`}>
+              <Button variant="ghost" size="lg" icon={<Wand2 size={18} />}>
+                Modify My CV
+              </Button>
+            </Link>
+          )}
         </div>
 
         <p className="mt-3 text-xs text-slate-400">No signup required · Works with any job board</p>
@@ -137,11 +144,20 @@ export default function HomePage() {
                   </p>
                 </div>
               </div>
-              <Link href={`/analysis/${optimizationJob!.id}`}>
-                <Button variant="secondary" size="sm" icon={<ArrowRight size={14} />}>
-                  Resume
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                {cv && (
+                  <Link href={`/modify/${cv.id}`}>
+                    <Button variant="ghost" size="sm" icon={<Wand2 size={14} />}>
+                      Modify
+                    </Button>
+                  </Link>
+                )}
+                <Link href={`/analysis/${optimizationJob!.id}`}>
+                  <Button variant="secondary" size="sm" icon={<ArrowRight size={14} />}>
+                    Resume
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </div>

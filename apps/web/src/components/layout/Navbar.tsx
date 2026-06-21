@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FileText, Home, Plus, Clock, LogOut, Wifi } from 'lucide-react';
+import { FileText, Home, Plus, Clock, LogOut, Wifi, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { logout } from '@/lib/api';
@@ -11,6 +11,7 @@ import { logout } from '@/lib/api';
 const navLinks = [
   { label: 'Dashboard', href: '/', icon: Home },
   { label: 'New CV', href: '/upload', icon: Plus },
+  { label: 'Modify CV', href: '/modify', icon: Wand2 },
   { label: 'History', href: '/history', icon: Clock },
 ];
 

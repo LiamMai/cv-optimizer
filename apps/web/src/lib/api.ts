@@ -50,6 +50,15 @@ export async function startOptimization(
   return response.data;
 }
 
+export async function startModification(
+  cvId: string,
+  userData: string,
+  config?: { maxPages?: number; tone?: 'professional' | 'conversational' | 'executive' }
+): Promise<{ jobId: string }> {
+  const response = await api.post<{ jobId: string }>('/modify', { cvId, userData, config });
+  return response.data;
+}
+
 function _sectionsObjToArray(obj: Record<string, unknown> | null | undefined): import('./types').CVSection[] {
   if (!obj || typeof obj !== 'object') return [];
   const IGNORE = new Set(['contact', 'raw']);
@@ -112,6 +121,12 @@ export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
         suggestions: ats.suggestions ?? [],
         breakdown: ats.breakdown ?? null,
       },
+      // "Modify CV" job fields — undefined for normal optimize jobs.
+      kind: data.result.kind,
+      changes: data.result.changes,
+      removed: data.result.removed,
+      needsMoreInfo: data.result.needsMoreInfo,
+      sourceNotes: data.result.userData,
     };
   }
 

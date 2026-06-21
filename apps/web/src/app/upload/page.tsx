@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,7 +29,7 @@ type CVInputMode = 'file' | 'text';
 
 export default function UploadPage() {
   const router = useRouter();
-  const { setCv, setJd, setOptimizationJob, config } = useCVStore();
+  const { cv, setCv, setJd, setOptimizationJob, config } = useCVStore();
   const addHistoryEntry = useHistoryStore((s) => s.addEntry);
 
   const [cvMode, setCvMode] = useState<CVInputMode>('file');
@@ -270,6 +271,15 @@ export default function UploadPage() {
           <p className="text-xs text-slate-400">
             Usually takes 10–30 seconds depending on CV length.
           </p>
+          {cv && (
+            <p className="text-xs text-slate-400">
+              No job description?{' '}
+              <Link href={`/modify/${cv.id}`} className="font-medium text-primary-600 hover:underline">
+                Modify your last CV with your own data
+              </Link>{' '}
+              instead.
+            </p>
+          )}
         </div>
       </form>
     </div>

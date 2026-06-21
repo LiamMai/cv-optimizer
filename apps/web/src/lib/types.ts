@@ -80,6 +80,16 @@ export interface OptimizationResult {
   atsScore: ATSScore;
   diff: SectionDiff[];
   contact?: CVContact;
+  // --- "Modify CV from user data" jobs only ---
+  kind?: 'optimize' | 'modify';
+  /** Human-readable summary of each edit the AI made. */
+  changes?: string[];
+  /** Content the AI dropped or recommends dropping (user confirms via reject). */
+  removed?: string[];
+  /** Follow-up questions where the user's data was too thin to write a strong bullet. */
+  needsMoreInfo?: { section: string; question: string }[];
+  /** The raw notes the user submitted — appended to when re-running with more notes. */
+  sourceNotes?: string;
 }
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   FileDown,
@@ -12,9 +13,14 @@ import {
   X,
   Eye,
   GitCompare,
+  Wand2,
+  ListChecks,
+  Trash2,
+  HelpCircle,
+  RotateCw,
 } from 'lucide-react';
 import { useCVStore } from '@/store/cvStore';
-import { pollJobStatus, exportPDF, exportDOCX } from '@/lib/api';
+import { pollJobStatus, exportPDF, exportDOCX, startModification } from '@/lib/api';
 import { SectionDiff } from '@/components/editor/SectionDiff';
 import {
   CvPage,
@@ -41,25 +47,50 @@ type RightView = 'review' | 'preview';
 
 export default function EditorPage({ params }: EditorPageProps) {
   const { jobId } = params;
+  const router = useRouter();
   const {
     optimizationJob,
-    updateOptimizationJob,
+    setOptimizationJob,
     diffDecisions,
     setDiffDecision,
     setManyDecisions,
+    config,
   } = useCVStore();
 
   const [rightView, setRightView] = useState<RightView>('review');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingDOCX, setIsExportingDOCX] = useState(false);
+  const [showChanges, setShowChanges] = useState(false);
+  const [moreNotes, setMoreNotes] = useState('');
+  const [isRerunning, setIsRerunning] = useState(false);
 
   const job = optimizationJob?.id === jobId ? optimizationJob : null;
 
+  // Poll until the job has a result. Covers the modify flow (which routes here
+  // straight from /modify with a pending job) and reloads on an unfinished job.
+  const hasResult = !!job?.result;
   useEffect(() => {
-    if (!job && jobId) {
-      pollJobStatus(jobId).then(updateOptimizationJob).catch(() => {});
-    }
-  }, [job, jobId, updateOptimizationJob]);
+    if (hasResult || !jobId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      try {
+        const fresh = await pollJobStatus(jobId);
+        if (cancelled) return;
+        setOptimizationJob(fresh);
+        if (fresh.status === 'pending' || fresh.status === 'processing') {
+          timer = setTimeout(tick, 2000);
+        }
+      } catch {
+        if (!cancelled) timer = setTimeout(tick, 3000);
+      }
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [jobId, hasResult, setOptimizationJob]);
 
   // Block-level diff ops per changed section (structured: bullets/entries/paragraph).
   const opsBySection = useMemo<Record<string, BlockOp[]>>(() => {
@@ -98,9 +129,14 @@ export default function EditorPage({ params }: EditorPageProps) {
   if (!job.result) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <p className="text-slate-600">Optimization is still in progress.</p>
-        <Link href={`/analysis/${jobId}`}>
-          <Button variant="secondary" icon={<ArrowLeft size={15} />}>Back to Analysis</Button>
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        <p className="text-slate-600">
+          {job.jdId === '' ? 'Updating your CV…' : 'Optimization is still in progress.'}
+        </p>
+        <Link href={job.jdId === '' ? `/modify/${job.cvId}` : `/analysis/${jobId}`}>
+          <Button variant="secondary" icon={<ArrowLeft size={15} />}>
+            {job.jdId === '' ? 'Back' : 'Back to Analysis'}
+          </Button>
         </Link>
       </div>
     );
@@ -108,6 +144,32 @@ export default function EditorPage({ params }: EditorPageProps) {
 
   const { originalSections, optimizedSections, diff, atsScore, contact } = job.result;
   const sortedOptimized = sortByPdfOrder(optimizedSections);
+
+  const isModify = job.result.kind === 'modify';
+  const changes = job.result.changes ?? [];
+  const removed = job.result.removed ?? [];
+  const needsMoreInfo = job.result.needsMoreInfo ?? [];
+  const hasModifyNotes = changes.length > 0 || removed.length > 0 || needsMoreInfo.length > 0;
+
+  // Re-run the modify job with extra notes appended to the original ones.
+  const handleRerun = async () => {
+    if (moreNotes.trim().length < 5) {
+      toast.error('Add a few words describing what to fix or include.');
+      return;
+    }
+    setIsRerunning(true);
+    const combined = [job.result?.sourceNotes, moreNotes.trim()].filter(Boolean).join('\n');
+    try {
+      const { jobId: newJobId } = await startModification(job.cvId, combined, { maxPages: config.maxPages });
+      setOptimizationJob({ id: newJobId, cvId: job.cvId, jdId: '', config, status: 'pending' });
+      toast.success('Re-running with your notes…');
+      router.push(`/editor/${newJobId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Re-run failed');
+    } finally {
+      setIsRerunning(false);
+    }
+  };
 
   const totalHunks = allHunkIds.length;
   const resolvedHunks = allHunkIds.filter((id) => diffDecisions[id]).length;
@@ -150,27 +212,40 @@ export default function EditorPage({ params }: EditorPageProps) {
       {/* Top bar */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
         <div className="flex items-center gap-3">
-          <Link href={`/analysis/${jobId}`}>
+          <Link href={isModify ? `/modify/${job.cvId}` : `/analysis/${jobId}`}>
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
-              Analysis
+              {isModify ? 'Back' : 'Analysis'}
             </Button>
           </Link>
           <div className="h-4 w-px bg-slate-200" />
           <div className="flex items-center gap-2">
-            <Columns2 size={16} className="text-slate-400" />
-            <span className="text-sm font-semibold text-slate-700">Review Changes</span>
+            {isModify ? <Wand2 size={16} className="text-primary-500" /> : <Columns2 size={16} className="text-slate-400" />}
+            <span className="text-sm font-semibold text-slate-700">{isModify ? 'Review Modifications' : 'Review Changes'}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {atsScore && (
-            <div className="hidden items-center gap-2 sm:flex">
-              <CircularProgressWithCenter score={atsScore.score} size={40} strokeWidth={5} />
-              <div>
-                <p className="text-xs font-semibold text-slate-700">ATS Score</p>
-                <p className="text-xs text-slate-400">{atsScore.matchPercent}% match</p>
+          {isModify ? (
+            hasModifyNotes && (
+              <Button
+                variant={showChanges ? 'secondary' : 'ghost'}
+                size="sm"
+                icon={<ListChecks size={14} />}
+                onClick={() => setShowChanges((v) => !v)}
+              >
+                What changed{needsMoreInfo.length > 0 ? ` · ${needsMoreInfo.length} to confirm` : ''}
+              </Button>
+            )
+          ) : (
+            atsScore && (
+              <div className="hidden items-center gap-2 sm:flex">
+                <CircularProgressWithCenter score={atsScore.score} size={40} strokeWidth={5} />
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">ATS Score</p>
+                  <p className="text-xs text-slate-400">{atsScore.matchPercent}% match</p>
+                </div>
               </div>
-            </div>
+            )
           )}
 
           <Badge variant={allResolved ? 'success' : 'neutral'}>
@@ -200,6 +275,67 @@ export default function EditorPage({ params }: EditorPageProps) {
         </div>
       </div>
 
+      {/* Modify: "what changed" + re-run with more notes */}
+      {isModify && showChanges && (
+        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              {changes.length > 0 && (
+                <div>
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <ListChecks size={13} className="text-emerald-600" /> What the AI did
+                  </p>
+                  <ul className="space-y-1 text-xs text-slate-600 list-disc list-inside">
+                    {changes.map((c, i) => <li key={i}>{c}</li>)}
+                  </ul>
+                </div>
+              )}
+              {removed.length > 0 && (
+                <div>
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <Trash2 size={13} className="text-red-500" /> Removed / recommended to drop
+                  </p>
+                  <ul className="space-y-1 text-xs text-slate-600 list-disc list-inside">
+                    {removed.map((r, i) => <li key={i}>{r}</li>)}
+                  </ul>
+                  <p className="mt-1 text-[11px] text-slate-400">Reject the red blocks on the right to keep anything you want.</p>
+                </div>
+              )}
+              {needsMoreInfo.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                    <HelpCircle size={13} /> Add more detail for a stronger result
+                  </p>
+                  <ul className="space-y-1 text-xs text-amber-700 list-disc list-inside">
+                    {needsMoreInfo.map((q, i) => (
+                      <li key={i}>{q.section ? <span className="font-medium">{q.section}: </span> : null}{q.question}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <RotateCw size={13} className="text-primary-600" /> Not quite right? Add more notes & re-run
+              </p>
+              <textarea
+                value={moreNotes}
+                onChange={(e) => setMoreNotes(e.target.value)}
+                rows={5}
+                placeholder="e.g. The latency win was 40% not 30%. Also add that the Rust CLI has 1.2k GitHub stars."
+                className="w-full resize-none rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+              />
+              <div className="mt-2 flex justify-end">
+                <Button size="sm" loading={isRerunning} icon={<RotateCw size={14} />} onClick={handleRerun}>
+                  Re-run with these notes
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Two-column split */}
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Left — original uploaded CV */}
@@ -219,7 +355,7 @@ export default function EditorPage({ params }: EditorPageProps) {
         <div className="flex w-full flex-col overflow-hidden lg:w-1/2">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-5 py-2">
             <div>
-              <h3 className="text-sm font-semibold text-slate-700">Optimized CV</h3>
+              <h3 className="text-sm font-semibold text-slate-700">{isModify ? 'Modified CV' : 'Optimized CV'}</h3>
               <p className="text-xs text-slate-400">
                 {rightView === 'review' ? 'Accept or reject each change' : 'Final result preview'}
               </p>
