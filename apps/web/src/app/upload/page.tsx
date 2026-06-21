@@ -6,17 +6,19 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { AlignLeft, Upload as UploadIcon, ArrowRight, FileText } from 'lucide-react';
+import { AlignLeft, Upload as UploadIcon, ArrowRight, FileText, Building2 } from 'lucide-react';
 import { FileDropzone } from '@/components/upload/FileDropzone';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { useCVStore } from '@/store/cvStore';
+import { useHistoryStore } from '@/store/historyStore';
 import { uploadCV, uploadCVText, analyzeJD, startOptimization } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const schema = z.object({
   cvText: z.string().optional(),
+  company: z.string().optional(),
   jdText: z.string().min(50, 'Please enter at least 50 characters for the job description.'),
 });
 
@@ -27,6 +29,7 @@ type CVInputMode = 'file' | 'text';
 export default function UploadPage() {
   const router = useRouter();
   const { setCv, setJd, setOptimizationJob, config } = useCVStore();
+  const addHistoryEntry = useHistoryStore((s) => s.addEntry);
 
   const [cvMode, setCvMode] = useState<CVInputMode>('file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -69,7 +72,15 @@ export default function UploadPage() {
       // Step 2: Analyze JD
       toast.loading('Analyzing job description...', { id: toastId });
       const jdResult = await analyzeJD(data.jdText);
-      setJd({ id: jdResult.id, text: data.jdText, analysis: jdResult.analysis });
+
+      // Resolve company: user-typed wins; otherwise auto-fill from the JD analysis.
+      // If neither has it, leave blank.
+      const typedCompany = data.company?.trim() ?? '';
+      const extractedCompany = jdResult.analysis.company?.trim() ?? '';
+      const company = typedCompany || extractedCompany;
+      const companyAutofilled = !typedCompany && !!extractedCompany;
+
+      setJd({ id: jdResult.id, text: data.jdText, analysis: jdResult.analysis, company });
 
       // Step 3: Start optimization
       toast.loading('Starting optimization...', { id: toastId });
@@ -83,6 +94,17 @@ export default function UploadPage() {
         status: 'pending' as const,
       };
       setOptimizationJob(initialJob);
+
+      // Step 4: Remember this application (localStorage history)
+      addHistoryEntry({
+        id: jobId,
+        company,
+        companyAutofilled,
+        jobTitle: jdResult.analysis.jobTitle ?? '',
+        cvId: parsedCV.id,
+        jdId: jdResult.id,
+        appliedAt: new Date().toISOString(),
+      });
 
       toast.success('Optimization started!', { id: toastId });
       router.push(`/analysis/${jobId}`);
@@ -189,9 +211,25 @@ export default function UploadPage() {
               }
             />
             <CardContent className="pt-4">
+              {/* Company name — optional; auto-filled from the JD when left blank */}
+              <div className="mb-3">
+                <label htmlFor="company" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                  <Building2 size={12} />
+                  Company name
+                  <span className="font-normal text-slate-400">— optional, auto-detected from the JD</span>
+                </label>
+                <input
+                  id="company"
+                  type="text"
+                  {...register('company')}
+                  placeholder="e.g. Acme Inc. (leave blank to auto-detect)"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+                />
+              </div>
+
               <textarea
                 {...register('jdText')}
-                rows={18}
+                rows={16}
                 placeholder="Paste the full job description here…&#10;&#10;Include the role title, responsibilities, required qualifications, and preferred skills."
                 className={cn(
                   'w-full resize-none rounded-lg border bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-colors',

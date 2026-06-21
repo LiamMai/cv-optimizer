@@ -29,6 +29,8 @@ export interface JDAnalysis {
   seniorityLevel: string;
   responsibilities: string[];
   industryTerms: string[];
+  jobTitle?: string;
+  company?: string;
 }
 
 export interface ATSScore {

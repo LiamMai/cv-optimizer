@@ -9,6 +9,8 @@ interface JDState {
   id: string;
   text: string;
   analysis: JDAnalysis;
+  /** Resolved company name (user-typed or auto-extracted from the JD). */
+  company?: string;
 }
 
 const defaultConfig: OptimizationConfig = {

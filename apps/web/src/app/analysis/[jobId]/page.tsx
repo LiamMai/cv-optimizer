@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, AlertTriangle, CheckCircle, Lightbulb, RefreshCw } from 'lucide-react';
 import { useCVStore } from '@/store/cvStore';
+import { useHistoryStore } from '@/store/historyStore';
 import { pollJobStatus } from '@/lib/api';
 import { ATSScoreCard } from '@/components/analysis/ATSScoreCard';
 import { KeywordChips } from '@/components/analysis/KeywordChips';
@@ -33,12 +34,14 @@ function SkeletonCard({ lines = 3 }: { lines?: number }) {
 export default function AnalysisPage({ params }: AnalysisPageProps) {
   const { jobId } = params;
   const router = useRouter();
-  const { optimizationJob, updateOptimizationJob } = useCVStore();
+  const { optimizationJob, updateOptimizationJob, jd } = useCVStore();
+  const updateHistoryEntry = useHistoryStore((s) => s.updateEntry);
 
   const job = optimizationJob?.id === jobId ? optimizationJob : null;
   const isPending = !job || job.status === 'pending' || job.status === 'processing';
   const isCompleted = job?.status === 'completed';
   const isFailed = job?.status === 'failed';
+  const company = jd?.company?.trim();
 
   const poll = useCallback(async () => {
     try {
@@ -70,12 +73,21 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
 
   const atsScore = job?.result?.atsScore;
 
+  // Backfill the optimized ATS score into the saved history entry once available.
+  useEffect(() => {
+    if (isCompleted && typeof atsScore?.score === 'number') {
+      updateHistoryEntry(jobId, { atsScore: atsScore.score });
+    }
+  }, [isCompleted, atsScore?.score, jobId, updateHistoryEntry]);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">ATS Analysis</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            ATS Analysis{company ? <span className="text-slate-400 font-semibold"> · {company}</span> : null}
+          </h1>
           <p className="text-sm text-slate-500">Job ID: {jobId}</p>
         </div>
         <div className="flex items-center gap-2">
