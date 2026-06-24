@@ -23,6 +23,12 @@ import authRouter from './routes/auth';
 
 const app = express();
 
+// Behind Render's TLS proxy: trust X-Forwarded-Proto so express sees the request
+// as HTTPS and emits the Secure session cookie. Required for sameSite:'none'.
+if (config.env === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ---------------------------------------------------------------------------
 // Security & request infrastructure
 // ---------------------------------------------------------------------------

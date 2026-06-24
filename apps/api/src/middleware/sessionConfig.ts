@@ -16,10 +16,11 @@ export const sessionMiddleware = session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    // 'strict' blocks cross-port (localhost:3000 → localhost:3001) in dev.
-    // 'lax' allows top-level navigations (OAuth redirects) while still blocking
-    // cross-site POST fetch. In prod with HTTPS + same domain, switch to 'strict'.
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    // Prod is cross-site (web on Vercel → API on Render), so the cookie must be
+    // 'none' or the browser drops it on XHR/fetch. 'none' requires secure:true
+    // (set above) + `app.set('trust proxy', 1)` so express emits Secure behind
+    // Render's TLS proxy. Dev stays 'lax' (http localhost can't use 'none').
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: TTL_HOURS * 60 * 60 * 1000,
   },
 });
