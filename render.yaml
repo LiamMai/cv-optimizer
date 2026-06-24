@@ -23,9 +23,12 @@ services:
         sync: false
       - key: CORS_ORIGIN         # usually same as FRONTEND_URL
         sync: false
-      # --- generated once by Render, then held constant ---
-      - key: ENCRYPTION_KEY      # AES key for session-scoped BYO API keys (encryption.ts)
-        generateValue: true
+      # AES-256-GCM key for session-scoped BYO API keys (encryption.ts) — MUST be
+      # exactly 64 hex chars. Generate with: openssl rand -hex 32. Not generateValue
+      # (Render's random value isn't valid hex → "Invalid key length" on /auth/api-key).
+      - key: ENCRYPTION_KEY
+        sync: false
+      # --- arbitrary random strings, generated once by Render ---
       - key: SESSION_SECRET
         generateValue: true
       - key: JWT_SECRET
