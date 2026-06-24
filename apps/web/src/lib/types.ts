@@ -127,4 +127,8 @@ export interface ProviderInfo {
   keyless?: boolean;
   /** Selectable models for this provider (model picker). */
   models?: AIModelOption[];
+  /** Placeholder shown in the BYO API-key input. */
+  keyPlaceholder?: string;
+  /** Hint text under the BYO API-key input (e.g. where to get a key). */
+  keyHint?: string;
 }

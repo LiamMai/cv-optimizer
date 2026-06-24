@@ -187,4 +187,11 @@ export const getGoogleAuthUrl = (): string =>
 export const connectFree = (model: string): Promise<{ provider: string; model: string }> =>
   api.post('/auth/free', { model }).then((r) => r.data);
 
+// Submit a BYO provider API key — encrypted + held in the session server-side, never echoed back.
+export const connectApiKey = (
+  provider: string,
+  apiKey: string
+): Promise<{ success: boolean; provider: string }> =>
+  api.post('/auth/api-key', { provider, apiKey }).then((r) => r.data);
+
 export default api;

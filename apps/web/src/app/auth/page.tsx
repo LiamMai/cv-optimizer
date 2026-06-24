@@ -1,11 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle } from 'lucide-react';
 import { ConnectProviderModal } from '@/components/auth/ConnectProviderModal';
 
-export default function AuthPage() {
+function AuthPageInner() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
 
@@ -29,5 +29,14 @@ export default function AuthPage() {
       )}
       <ConnectProviderModal />
     </div>
+  );
+}
+
+// useSearchParams() must sit under a Suspense boundary or the production build fails.
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<ConnectProviderModal />}>
+      <AuthPageInner />
+    </Suspense>
   );
 }
