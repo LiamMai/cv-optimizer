@@ -2,6 +2,8 @@
 
 AI-powered resume builder that tailors your CV to any job description. Parses your existing CV, analyzes the JD, rewrites content for ATS compatibility, and preserves your original template.
 
+**Live demo:** https://cv-optimizer-web-delta.vercel.app
+
 ## What it does
 
 1. **Upload CV** — PDF, DOCX, or paste text. Extracts all sections automatically.

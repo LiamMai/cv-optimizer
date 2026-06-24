@@ -1,0 +1,20 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded brand background -->
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+  <!-- CV document with folded corner -->
+  <path d="M9 6.5h8.5L23 12v13.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-18a1 1 0 0 1 1-1z" fill="#ffffff"/>
+  <path d="M17.5 6.5 23 12h-4.5a1 1 0 0 1-1-1V6.5z" fill="#bfdbfe"/>
+  <!-- text lines -->
+  <rect x="11" y="14.5" width="9" height="1.6" rx="0.8" fill="#93c5fd"/>
+  <rect x="11" y="18" width="9" height="1.6" rx="0.8" fill="#bfdbfe"/>
+  <rect x="11" y="21.5" width="5.5" height="1.6" rx="0.8" fill="#bfdbfe"/>
+  <!-- AI sparkle -->
+  <path d="M22.5 17.5c.25 2.1.9 2.75 3 3-2.1.25-2.75.9-3 3-.25-2.1-.9-2.75-3-3 2.1-.25 2.75-.9 3-3z" fill="#fbbf24" stroke="#2563eb" stroke-width="0.6" stroke-linejoin="round"/>
+  <path d="M26.5 13c.13 1.05.45 1.37 1.5 1.5-1.05.13-1.37.45-1.5 1.5-.13-1.05-.45-1.37-1.5-1.5 1.05-.13 1.37-.45 1.5-1.5z" fill="#fde68a"/>
+</svg>
