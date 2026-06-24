@@ -1,0 +1,33 @@
+# Render Blueprint — deploy the Express API (Docker) on the free tier.
+# DB lives on Neon (free serverless Postgres); set DATABASE_URL below.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Free web services spin down after ~15 min idle → first request cold-starts (~30s).
+services:
+  - type: web
+    name: cv-optimizer-api
+    runtime: docker
+    plan: free
+    region: singapore            # pick the region nearest your users / Neon project
+    rootDir: apps/api            # build context = apps/api (API has no workspace deps)
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # --- secrets: set in the Render dashboard (sync:false = not stored in repo) ---
+      - key: DATABASE_URL        # Neon pooled connection string (?sslmode=require)
+        sync: false
+      - key: GROQ_API_KEY        # powers the keyless "Free AI" (groq-free) mode
+        sync: false
+      - key: FRONTEND_URL        # web app origin, e.g. https://your-app.vercel.app
+        sync: false
+      - key: CORS_ORIGIN         # usually same as FRONTEND_URL
+        sync: false
+      # --- generated once by Render, then held constant ---
+      - key: ENCRYPTION_KEY      # AES key for session-scoped BYO API keys (encryption.ts)
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      # NODE_ENV is baked into the image; PORT is injected by Render automatically.
