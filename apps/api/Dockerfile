@@ -48,5 +48,7 @@ RUN mkdir -p uploads && chown appuser:appgroup uploads
 USER appuser
 
 EXPOSE 3001
-# Sync schema to the DB (idempotent; no migrations dir → db push), then start.
-CMD ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate && node dist/index.js"]
+# Sync schema to the DB (no migrations dir → db push), then start.
+# --accept-data-loss: db push refuses destructive changes (dropped column/table) without it.
+# Fine while the DB is disposable; switch to `prisma migrate deploy` before you carry real user data.
+CMD ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate --accept-data-loss && node dist/index.js"]
