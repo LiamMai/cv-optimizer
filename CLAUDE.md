@@ -65,7 +65,7 @@ History is **client-only**: `apps/web/src/store/historyStore.ts`, a Zustand stor
 - Conventional Commits. Recent history: `feat(ai):`, `refactor(cv-editor):`.
 - Cross-app types live in `packages/shared` — change there, not duplicated per app.
 - Secrets (API keys, OAuth tokens) stay encrypted + session-scoped; `/auth/me` returns `{ provider, model? }` only, never keys/tokens.
-- Rate limits: 100 req/15min global; 10 req/min on `/jd` + `/optimize` + `/modify`.
+- Rate limits: 100 req/15min global; 10 req/min on `/jd` + `/optimize` + `/modify` (POST only — the `GET /optimize/:jobId` status poll is exempt, else the client poller 429s its own running job).
 
 ## Keep docs in sync (do this automatically)
 

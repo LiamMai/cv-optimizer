@@ -17,18 +17,65 @@ export async function parseFile(filePath: string, mimetype: string): Promise<str
   }
 }
 
+// Below this many extracted chars we treat the PDF as having no real text layer
+// (scanned/image-only or text-as-outlines) and fall back to OCR.
+const OCR_TEXT_THRESHOLD = 50;
+
 async function _parsePDF(filePath: string): Promise<string> {
   // Prefer pdfjs-dist: it preserves visual reading order (so the candidate's name
   // lands on its own line) and is far more robust than pdf-parse on real-world PDFs.
+  let text = '';
   try {
-    return await _parsePdfWithPdfjs(filePath);
+    text = await _parsePdfWithPdfjs(filePath);
   } catch {
     // Fallback to pdf-parse if pdfjs can't open the document.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>;
     const buffer = await fs.readFile(filePath);
     const result = await pdfParse(buffer);
-    return result.text;
+    text = result.text;
+  }
+
+  // Image-only / outlined PDFs yield (almost) no extractable text. Last resort: OCR.
+  if (text.trim().length < OCR_TEXT_THRESHOLD) {
+    try {
+      const ocrText = await _ocrPdf(filePath);
+      if (ocrText.trim().length > text.trim().length) return ocrText;
+    } catch (err) {
+      // OCR failed (e.g. lang data unreachable, render error) — fall through with what
+      // we have; the route then rejects with the "too little text" message.
+      console.error('[parser] OCR fallback failed:', (err as Error).message);
+    }
+  }
+
+  return text;
+}
+
+/**
+ * OCR fallback for PDFs with no text layer: render each page to a PNG via pdf-to-img
+ * then recognize text with tesseract.js. Slow (seconds/page) — only used when the
+ * normal text extractors come back near-empty.
+ */
+async function _ocrPdf(filePath: string): Promise<string> {
+  const { pdf } = await import('pdf-to-img');
+  const { createWorker } = await import('tesseract.js');
+
+  // scale=3 ≈ 216 DPI — enough resolution for tesseract to read CV body text.
+  const document = await pdf(filePath, { scale: 3 });
+
+  const worker = await createWorker('eng');
+  try {
+    const pageTexts: string[] = [];
+    // Iterate by index (length/getPage) rather than `for await` — the latter needs
+    // the ES2023 AsyncIterable lib types which this tsconfig target predates.
+    for (let p = 1; p <= document.length; p++) {
+      const image = await document.getPage(p);
+      const { data } = await worker.recognize(image);
+      if (data.text) pageTexts.push(data.text);
+    }
+    return pageTexts.join('\n\n');
+  } finally {
+    await worker.terminate();
   }
 }
 
@@ -280,6 +327,17 @@ function _extractContact(lines: string[]): ContactInfo {
 
     // Name — first line in the header block that looks like a person's name.
     if (!contact.name && _looksLikeName(line)) contact.name = line;
+    // Combined header like "DUONG DANG TUAN / BACKEND DEVELOPER" — common in designed
+    // CVs and the only form OCR sees (name + role share one visual line). Split on the
+    // separator and take the leading name segment, the rest as the title.
+    else if (!contact.name && /[/|]/.test(line)) {
+      const [head, ...rest] = line.split(/\s*[/|]\s*/);
+      const tail = rest.join(' ').trim();
+      if (_looksLikeName(head)) {
+        contact.name = head.trim();
+        if (!contact.title && _looksLikeTitle(tail)) contact.title = tail;
+      }
+    }
     // Title/headline — a role line (usually right after the name).
     else if (contact.name && !contact.title && _looksLikeTitle(line)) contact.title = line;
 

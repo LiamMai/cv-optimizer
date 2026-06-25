@@ -47,7 +47,7 @@ Pick how the AI runs from the **Connect Provider** screen. Three ways:
 | Backend | Node.js, Express, TypeScript |
 | AI | Anthropic Claude, OpenAI, Google Gemini, Groq — selectable per session |
 | Database | PostgreSQL via Prisma ORM |
-| Parsers | `pdf-parse` + `pdfjs-dist` (PDF), `mammoth` (DOCX) |
+| Parsers | `pdfjs-dist` + `pdf-parse` (PDF), `tesseract.js` + `pdf-to-img` (OCR fallback), `mammoth` (DOCX) |
 | Export | `puppeteer` (PDF, HTML→Chromium template; `pdfkit` fallback), `docx` (DOCX), `archiver` |
 | Package manager | pnpm |
 
@@ -318,7 +318,7 @@ Returns: `coveredKeywords`, `missingKeywords`, `weakSections`, `suggestions`.
 | Endpoint group | Limit |
 |---|---|
 | All routes | 100 requests / 15 min |
-| `/jd`, `/optimize`, `/modify` (AI routes) | 10 requests / min |
+| `/jd`, `/optimize`, `/modify` (AI routes) | 10 requests / min — **POST only**; the `GET /optimize/:jobId` status poll is exempt |
 
 ---
 
@@ -326,11 +326,13 @@ Returns: `coveredKeywords`, `missingKeywords`, `weakSections`, `suggestions`.
 
 | Type | Parser |
 |---|---|
-| `.pdf` | `pdf-parse` |
+| `.pdf` | `pdfjs-dist` (primary, preserves reading order) → `pdf-parse` (fallback) → `tesseract.js` OCR (last resort) |
 | `.docx` | `mammoth` |
 | `.txt` | `fs.readFile` |
 
 Max upload size: **10 MB** (configurable via `MAX_FILE_SIZE_MB`).
+
+**Image-only / scanned PDFs:** when text extraction yields fewer than 50 chars (no text layer — scanned pages or text exported as vector outlines), the parser renders each page to a PNG via `pdf-to-img` and OCRs it with `tesseract.js` (English). OCR is slow (~1s/page) and runs only as a fallback. First run downloads the tesseract language data from a CDN, so the API host must allow outbound network (or the data must be pre-cached).
 
 ---
 
