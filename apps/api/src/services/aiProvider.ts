@@ -44,12 +44,16 @@ export interface SessionCredentials {
  * the anonymous public endpoints which rate-limit and truncate long JSON output.
  */
 export const FREE_MODELS = [
-  'llama-3.3-70b-versatile',
-  'llama-3.1-8b-instant',
   'openai/gpt-oss-120b',
   'openai/gpt-oss-20b',
+  // 30K TPM on Groq's free tier vs 8K for the gpt-oss models — the escape hatch when a
+  // long CV + JD blows the 413 "Request too large" TPM cap on the default model.
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'llama-3.1-8b-instant',
 ] as const;
-export const DEFAULT_FREE_MODEL = 'llama-3.3-70b-versatile';
+export const DEFAULT_FREE_MODEL = 'openai/gpt-oss-120b';
+/** Fallback when a request blows a smaller model's TPM cap (Groq 413) — biggest free limit. */
+export const LARGE_CONTEXT_FREE_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 // ---------------------------------------------------------------------------
 // Retry / timeout policy
@@ -318,7 +322,7 @@ async function callGroq(
   apiKey: string,
   messages: Message[],
   options: CompletionOptions,
-  model: string = 'llama-3.3-70b-versatile'
+  model: string = DEFAULT_FREE_MODEL
 ): Promise<CompletionResult> {
   const { maxTokens = 4096, temperature = 0.3 } = options;
   const client = new OpenAI({
@@ -370,9 +374,36 @@ export async function createCompletionFromSession(
     if (!serverKey) {
       throw new Error('GROQ_API_KEY is not configured on the server. Set it in your .env file.');
     }
+    // Ignore session models no longer in FREE_MODELS (e.g. decommissioned ones).
     const model =
-      creds.provider === 'groq-free' && creds.model ? creds.model : 'llama-3.3-70b-versatile';
-    return callGroq(serverKey, messages, options, model);
+      creds.provider === 'groq-free' &&
+      creds.model &&
+      (FREE_MODELS as readonly string[]).includes(creds.model)
+        ? creds.model
+        : DEFAULT_FREE_MODEL;
+    // Groq free tier 413s when one request exceeds the model's TPM cap (8K on the
+    // gpt-oss models). Retrying the same model can't help — fall back once to the
+    // large-context free model (30K TPM) before giving up.
+    const tooLarge = (err: unknown) => (err as { status?: number })?.status === 413;
+    try {
+      return await callGroq(serverKey, messages, options, model);
+    } catch (err) {
+      if (!tooLarge(err)) throw err;
+      if (model !== LARGE_CONTEXT_FREE_MODEL) {
+        console.warn(
+          `[aiProvider] ${model} rejected the request as too large; retrying with ${LARGE_CONTEXT_FREE_MODEL}`
+        );
+        try {
+          return await callGroq(serverKey, messages, options, LARGE_CONTEXT_FREE_MODEL);
+        } catch (err2) {
+          if (!tooLarge(err2)) throw err2;
+        }
+      }
+      throw new Error(
+        'Your CV + job description is too large even for the largest free model. ' +
+          'Connect your own API key (Claude, OpenAI, Gemini, or Groq) to process it.'
+      );
+    }
   }
 
   if (!creds.encryptedApiKey) {

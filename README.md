@@ -10,7 +10,7 @@ AI-powered resume builder that tailors your CV to any job description. Parses yo
 2. **Paste JD** — Extracts required skills, keywords, seniority level, responsibilities.
 3. **AI Optimization** — Rewrites bullet points and sections to match the JD while keeping your original layout intact. Enforces human-like writing, no hallucination, measurable achievements.
 4. **ATS Score** — 0–100 score with keyword gap analysis and section-by-section breakdown.
-5. **Edit & Export** — TipTap rich-text editor with accept/reject per-section diffs. Export to PDF or DOCX.
+5. **Edit & Export** — TipTap rich-text editor with accept/reject per-section diffs. Paginated A4 preview mirrors the PDF (Inter 11pt, same page-break rules — pages fill, and an entry header never separates from its first bullets). Export to PDF or DOCX.
 6. **Modify from your data** — Skip the JD: hand the AI free-form notes (new role, fresh metrics, projects to drop) and it folds them into the right sections, mirrors existing entry structure, re-sorts by date, and asks follow-up questions where your notes are too thin. Returns the same accept/reject diff as optimization.
 7. **History** — Every job is remembered locally (company, job title, ATS score, date) so you can re-open past results and track which companies you've applied to.
 
@@ -30,10 +30,10 @@ Pick how the AI runs from the **Connect Provider** screen. Three ways:
 
 | Model | Notes |
 |---|---|
-| `llama-3.3-70b-versatile` | Default — best quality |
-| `llama-3.1-8b-instant` | Fastest |
-| `openai/gpt-oss-120b` | — |
-| `openai/gpt-oss-20b` | — |
+| `openai/gpt-oss-120b` | Default — best quality (8K TPM free limit) |
+| `openai/gpt-oss-20b` | 8K TPM free limit |
+| `meta-llama/llama-4-scout-17b-16e-instruct` | Long CVs — biggest free limit (30K TPM) |
+| `llama-3.1-8b-instant` | Fastest (6K TPM free limit) |
 
 > **Note:** Free/OAuth tiers have rate limits. Responses may be slow or temporarily unavailable under load.
 

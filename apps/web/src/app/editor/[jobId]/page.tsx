@@ -26,6 +26,7 @@ import {
   CvPage,
   FormattedCv,
   FormattedBlocks,
+  PaginatedCv,
   SectionHeading,
   sectionLabel,
   sortByPdfOrder,
@@ -384,9 +385,7 @@ export default function EditorPage({ params }: EditorPageProps) {
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
             {rightView === 'preview' ? (
-              <CvPage contact={contact}>
-                <FormattedCv sections={resolvedSections} />
-              </CvPage>
+              <PaginatedCv contact={contact} sections={resolvedSections} />
             ) : (
               <CvPage contact={contact}>
                 {sortedOptimized.map((section) => {

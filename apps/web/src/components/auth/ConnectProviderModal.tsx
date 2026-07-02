@@ -14,7 +14,7 @@ const MODELS = freeProvider?.models ?? [];
 export function ConnectProviderModal() {
   const router = useRouter();
   const { setAuth } = useAuthStore();
-  const [model, setModel] = React.useState(MODELS[0]?.id ?? 'llama-3.3-70b-versatile');
+  const [model, setModel] = React.useState(MODELS[0]?.id ?? 'openai/gpt-oss-120b');
   const [connecting, setConnecting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 

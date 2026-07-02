@@ -108,7 +108,7 @@ function _renderPdfSection(doc: any, title: string, content: string | undefined,
   if (!content || !String(content).trim()) return;
 
   doc.moveDown(0.7);
-  doc.font('Helvetica-Bold').fontSize(11).fillColor('#1a1a1a').text(title.toUpperCase(), { characterSpacing: 0.8 });
+  doc.font('Helvetica-Bold').fontSize(13).fillColor('#1a1a1a').text(title.toUpperCase(), { characterSpacing: 0.8 });
   const ruleY = doc.y + 2;
   doc
     .moveTo(doc.page.margins.left, ruleY)
@@ -118,7 +118,7 @@ function _renderPdfSection(doc: any, title: string, content: string | undefined,
     .stroke();
   doc.moveDown(0.5);
 
-  doc.font('Helvetica').fontSize(10.5).fillColor('#1a1a1a');
+  doc.font('Helvetica').fontSize(11).fillColor('#1a1a1a');
   if (asBullets) {
     _coalesceLines(content)
       .forEach((rawLine) => {
@@ -127,8 +127,8 @@ function _renderPdfSection(doc: any, title: string, content: string | undefined,
         if (_isEntryHeader(line)) {
           // Role / company / date lines stand out — bold, flush left, small gap above.
           doc.moveDown(0.25);
-          doc.font('Helvetica-Bold').fontSize(10.5).text(clean, { paragraphGap: 2, lineGap: 1 });
-          doc.font('Helvetica').fontSize(10.5);
+          doc.font('Helvetica-Bold').fontSize(11).text(clean, { paragraphGap: 2, lineGap: 1 });
+          doc.font('Helvetica').fontSize(11);
         } else {
           doc.text(`•  ${clean}`, { indent: 8, paragraphGap: 3, lineGap: 1.5 });
         }
@@ -162,7 +162,7 @@ async function _exportWithPdfkit(sections: CVSections, meta: { name?: string } =
 
   // Header — name + contact line
   const name = contact.name || meta.name || 'Candidate';
-  doc.font('Helvetica-Bold').fontSize(22).fillColor('#1a1a1a').text(name, { align: 'center', characterSpacing: 1 });
+  doc.font('Helvetica-Bold').fontSize(25).fillColor('#1a1a1a').text(name, { align: 'center', characterSpacing: 1 });
 
   const contactLine = [contact.email, contact.phone, contact.location]
     .filter(Boolean)
@@ -361,33 +361,39 @@ function _buildCvHtml(sections: CVSections, meta: { name?: string }): string {
   }).filter(Boolean).join('\n');
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
+<html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+<style>
   /* Root font-size is the single scale knob; everything below is em/rem so it scales uniformly
-     when the fitter adjusts it to fill pages. */
-  html { font-size: 10.5pt; }
+     when the fitter adjusts it to fill pages. Base = 11pt body text. */
+  html { font-size: 11pt; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: "Helvetica Neue", Helvetica, Arial, "Segoe UI", sans-serif; color: #1a1a1a; font-size: 1rem; line-height: 1.42; }
-  .name { text-align: center; font-size: 2.45rem; font-weight: 700; letter-spacing: 2px; }
-  .title { text-align: center; font-size: 1.24rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-top: 0.2em; }
-  .contact { text-align: center; font-size: 0.95rem; color: #333; margin-top: 0.62em; }
-  .links { text-align: center; font-size: 0.95rem; margin-top: 0.26em; }
+  body { font-family: Inter, "Helvetica Neue", Helvetica, Arial, "Segoe UI", sans-serif; color: #1a1a1a; font-size: 1rem; line-height: 1.42; }
+  .name { text-align: center; font-size: 2.27rem; font-weight: 700; letter-spacing: 2px; } /* 25pt */
+  .title { text-align: center; font-size: 1.36rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-top: 0.2em; } /* 15pt */
+  .contact { text-align: center; font-size: 0.9rem; color: #333; margin-top: 0.62em; }
+  .links { text-align: center; font-size: 0.9rem; margin-top: 0.26em; }
   .links a { color: #1155cc; text-decoration: underline; }
   .links .sep { color: #999; margin: 0 0.6em; }
   section a { color: #1155cc; text-decoration: underline; }
   section { margin-top: 1.15em; }
   /* Keep a heading with the content that follows it; otherwise let sections flow across pages. */
-  h2 { font-size: 1.1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+  h2 { font-size: 1.18rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; /* 13pt */
        border-bottom: 1.4px solid #1a1a1a; padding-bottom: 0.26em; margin-bottom: 0.6em;
        break-after: avoid; page-break-after: avoid; }
   p.summary { text-align: justify; orphans: 2; widows: 2; }
   ul { list-style: none; }
-  /* Allow long (paragraph-style) bullets to break across pages rather than jumping whole
-     and leaving a big gap; orphans/widows prevent ugly single-line splits. */
+  /* Bullets split at text-line boundaries so pages fill completely; orphans/widows
+     keep at least 2 lines on each side of a split. */
   li { position: relative; padding-left: 1.3em; margin-bottom: 0.32em; text-align: justify;
        orphans: 2; widows: 2; }
   li::before { content: "•"; position: absolute; left: 0.15em; color: #1a1a1a; }
-  /* Let a long entry break across pages (so it fills the page instead of jumping whole and
-     leaving a gap), but never strand the header alone — it stays glued to its first bullet. */
+  /* Entries (job/project header + bullets) break across pages so every page fills —
+     no big blanks. The unbreakable lead chunk is the header + the first lines of its
+     first bullet (orphans:2), so a header is never stranded at a page bottom.
+     Mirrors paginate() in the web preview (CvPaper.tsx). */
   .entry-block { break-inside: auto; page-break-inside: auto; }
   .entry { display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.7em; margin-bottom: 0.15em;
            break-inside: avoid; page-break-inside: avoid; break-after: avoid; page-break-after: avoid; }
@@ -409,7 +415,7 @@ function _buildCvHtml(sections: CVSections, meta: { name?: string }): string {
 // A4 printable area at 96dpi after 14mm vertical / 16mm horizontal margins.
 const PAGE_CONTENT_PX = ((297 - 14 * 2) / 25.4) * 96; // ≈ 1016px tall
 const PAGE_CONTENT_W_PX = Math.round(((210 - 16 * 2) / 25.4) * 96); // ≈ 673px wide
-const BASE_PT = 10.5; // must match `html { font-size }` in the template
+const BASE_PT = 11; // must match `html { font-size }` in the template
 
 /**
  * Pick a root font scale so content fills the page(s) nicely: grow short CVs toward a full
@@ -428,15 +434,15 @@ async function _measureBottom(page: any): Promise<number> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const atoms: Array<{ top: number; height: number; atomic: boolean }> = await page.evaluate(() => {
     const doc = (globalThis as any).document;
-    // Atomic = must not split: page header, section headings, entry header lines, and list
-    // items (entry bullets + skills/education). Entry blocks now break across pages, so each
-    // bullet is its own atom. p.summary is breakable (long paragraph may flow across pages).
+    // Atomic = must not split: page header, section headings, and entry header lines.
+    // Everything else — bullets, list items, the summary paragraph — splits at
+    // text-line boundaries (orphans/widows 2) so pages fill completely.
     const els = Array.from(
       doc.querySelectorAll('header, h2, p.summary, .entry, li')
     ) as any[];
     return els.map((el) => {
       const r = el.getBoundingClientRect();
-      return { top: r.top, height: r.height, atomic: !el.matches('p.summary') };
+      return { top: r.top, height: r.height, atomic: el.matches('header, h2, .entry') };
     });
   });
 
@@ -508,6 +514,9 @@ async function _renderHtmlToPdf(html: string): Promise<Buffer> {
     await page.emulateMediaType('print');
     await page.setViewport({ width: PAGE_CONTENT_W_PX, height: Math.round(PAGE_CONTENT_PX), deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'networkidle0' });
+    // Ensure the Inter webfont has been applied before measuring — a late font swap
+    // changes line wraps and would invalidate the pagination measurement.
+    await page.evaluate(() => (globalThis as any).document.fonts.ready).catch(() => {});
     await _fitToPages(page);
     const pdf = await page.pdf({
       format: 'A4',
@@ -565,7 +574,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     const blocks: any[] = [
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: name, bold: true, size: 40, font: 'Arial' })],
+        children: [new TextRun({ text: name, bold: true, size: 50, font: 'Inter' })],
         spacing: { after: contact.title ? 20 : 60 },
       }),
     ];
@@ -573,7 +582,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
       blocks.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: contact.title.toUpperCase(), bold: true, size: 24, font: 'Arial' })],
+          children: [new TextRun({ text: contact.title.toUpperCase(), bold: true, size: 30, font: 'Inter' })],
           spacing: { after: 60 },
         })
       );
@@ -591,7 +600,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
       blocks.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: parts, size: 18, color: '555555', font: 'Arial' })],
+          children: [new TextRun({ text: parts, size: 18, color: '555555', font: 'Inter' })],
           spacing: { after: contact.links ? 40 : 200 },
         })
       );
@@ -602,7 +611,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     if (links.length) {
       const children: any[] = [];
       links.forEach((f, i) => {
-        if (i > 0) children.push(new TextRun({ text: '   |   ', size: 18, color: '555555', font: 'Arial' }));
+        if (i > 0) children.push(new TextRun({ text: '   |   ', size: 18, color: '555555', font: 'Inter' }));
         children.push(
           new ExternalHyperlink({
             link: contact[f.key] as string,
@@ -611,7 +620,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
                 text: f.label,
                 size: 18,
                 color: '1155CC',
-                font: 'Arial',
+                font: 'Inter',
                 underline: { type: UnderlineType.SINGLE },
               }),
             ],
@@ -631,8 +640,8 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
         new TextRun({
           text: title.toUpperCase(),
           bold: true,
-          size: 22,
-          font: 'Arial',
+          size: 26,
+          font: 'Inter',
           underline: { type: UnderlineType.SINGLE },
         }),
       ],
@@ -651,7 +660,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     let m: RegExpExecArray | null;
     INLINE_LINK.lastIndex = 0;
     const pushText = (t: string) => {
-      if (t) runs.push(new TextRun({ text: t, size: 20, bold: opts.bold, font: 'Arial' }));
+      if (t) runs.push(new TextRun({ text: t, size: 22, bold: opts.bold, font: 'Inter' }));
     };
     while ((m = INLINE_LINK.exec(text)) !== null) {
       pushText(text.slice(last, m.index));
@@ -661,14 +670,14 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
         new ExternalHyperlink({
           link: url,
           children: [
-            new TextRun({ text: label, size: 20, color: '1155CC', font: 'Arial', underline: { type: UnderlineType.SINGLE } }),
+            new TextRun({ text: label, size: 22, color: '1155CC', font: 'Inter', underline: { type: UnderlineType.SINGLE } }),
           ],
         })
       );
       last = m.index + m[0].length;
     }
     pushText(text.slice(last));
-    return runs.length ? runs : [new TextRun({ text, size: 20, bold: opts.bold, font: 'Arial' })];
+    return runs.length ? runs : [new TextRun({ text, size: 22, bold: opts.bold, font: 'Inter' })];
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
