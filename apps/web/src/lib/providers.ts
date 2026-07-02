@@ -14,10 +14,10 @@ export const PROVIDERS: ProviderInfo[] = [
     free: true,
     keyless: true,
     models: [
-      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (best quality)' },
-      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (fastest)' },
-      { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B' },
+      { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (best quality)' },
       { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B' },
+      { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout (long CVs — biggest free limit)' },
+      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (fastest)' },
     ],
   },
 ];

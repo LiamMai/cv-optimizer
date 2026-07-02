@@ -36,7 +36,7 @@ No test suite. Verify changes with `type-check` / `tsc --noEmit` and by running 
 `apps/api/src/services/aiProvider.ts` is the single dispatch point. Providers:
 
 - **BYO key** — `claude`, `openai`, `gemini`, `groq`. Key submitted via `POST /auth/api-key`, AES-encrypted (`encryption.ts`, `ENCRYPTION_KEY`), held only in the session. Never logged, never persisted to DB.
-- **`groq-free`** — keyless "Free AI". Runs on the server's shared `GROQ_API_KEY`. User picks a model from `FREE_MODELS` (default `llama-3.3-70b-versatile`). This is the default mode. Pollinations/anonymous endpoints were tried and dropped (rate-limited, truncated JSON).
+- **`groq-free`** — keyless "Free AI". Runs on the server's shared `GROQ_API_KEY`. User picks a model from `FREE_MODELS` (default `openai/gpt-oss-120b`; llama-3.3-70b was dropped when Groq deprecated it). This is the default mode. Pollinations/anonymous endpoints were tried and dropped (rate-limited, truncated JSON).
 - **`gemini-oauth`** — Google sign-in. Legacy; currently routed through the server Groq key like `groq-free`.
 
 Entry point is `createCompletionFromSession(session, messages, options)`. `createCompletion(...)` is the **deprecated** env-key fallback (`AI_PROVIDER` + `*_API_KEY`) — don't build new features on it.
@@ -60,12 +60,14 @@ History is **client-only**: `apps/web/src/store/historyStore.ts`, a Zustand stor
 
 `apps/api/src/services/exporter.ts`. PDF = build HTML from the CV template, render via **Puppeteer/Chromium**; falls back to `pdfkit` when Chromium is unavailable. **Prod must ship Chromium** or PDFs degrade to the pdfkit fallback. DOCX via `docx`.
 
+Typography: Inter (fetched from Google Fonts inside the Chromium page — needs outbound network in prod, else it silently falls back to Helvetica), 11pt body / 25pt name / 15pt header title / 13pt section headings. Page-break rules: pages fill — entries break at bullet boundaries, but an entry header + its first two bullets never separate, and headings glue to their first content. The `_measureBottom` pagination simulation MUST list the same atomic elements as the CSS break rules — change one, change both. The editor's paginated preview (`PaginatedCv` in `apps/web/src/components/editor/CvPaper.tsx`) mirrors these fonts/sizes/break rules client-side; keep it in sync with the template.
+
 ## Conventions
 
 - Conventional Commits. Recent history: `feat(ai):`, `refactor(cv-editor):`.
 - Cross-app types live in `packages/shared` — change there, not duplicated per app.
 - Secrets (API keys, OAuth tokens) stay encrypted + session-scoped; `/auth/me` returns `{ provider, model? }` only, never keys/tokens.
-- Rate limits: 100 req/15min global; 10 req/min on `/jd` + `/optimize` + `/modify`.
+- Rate limits: 100 req/15min global; 10 req/min on `/jd` + `/optimize` + `/modify` (POST only — the `GET /optimize/:jobId` status poll is exempt, else the client poller 429s its own running job).
 
 ## Keep docs in sync (do this automatically)
 

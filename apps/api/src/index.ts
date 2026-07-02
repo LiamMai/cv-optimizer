@@ -21,7 +21,7 @@ import modifyRouter from './routes/modify';
 import exportRouter from './routes/export';
 import authRouter from './routes/auth';
 
-const app = express();
+const app: express.Application = express();
 
 // Behind Render's TLS proxy: trust X-Forwarded-Proto so express sees the request
 // as HTTPS and emits the Secure session cookie. Required for sameSite:'none'.
@@ -65,13 +65,17 @@ const globalLimiter = rateLimit({
   message: { error: 'Too many requests', message: 'Please slow down and try again later.' },
 });
 
-// Stricter limiter for AI-powered endpoints (costs money per call)
+// Stricter limiter for AI-powered endpoints (costs money per call).
+// GET requests are exempt: the optimize job-status poll (GET /optimize/:jobId) is a
+// cheap status read, fired every few seconds by the client, and must not count against
+// the 10/min AI budget — otherwise a single running job 429s its own poller.
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,      // 1 minute window
-  max: 10,                   // 10 AI calls per minute per IP
+  max: 20,                   // 20 AI calls per minute per IP
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Rate limit exceeded', message: 'AI endpoints are limited to 10 requests per minute.' },
+  skip: (req) => req.method === 'GET',
+  message: { error: 'Rate limit exceeded', message: 'AI endpoints are limited to 20 requests per minute.' },
 });
 
 app.use(globalLimiter);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, AlertTriangle, CheckCircle, Lightbulb, RefreshCw } from 'lucide-react';
@@ -43,33 +43,35 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
   const isFailed = job?.status === 'failed';
   const company = jd?.company?.trim();
 
-  const poll = useCallback(async () => {
-    try {
-      const updated = await pollJobStatus(jobId);
-      updateOptimizationJob(updated);
-    } catch {
-      // silent — user can retry
-    }
-  }, [jobId, updateOptimizationJob]);
-
   useEffect(() => {
     if (!isPending) return;
 
-    poll(); // immediate first check
-    const interval = setInterval(async () => {
+    // Single self-scheduling poller: each tick waits for its response before scheduling
+    // the next, so slow responses can't pile up overlapping requests. The `active` flag
+    // ensures a duplicate mount (React StrictMode in dev) or unmount can't leave a second
+    // poller running — which is what caused the bursts of optimize calls.
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = async () => {
       try {
         const updated = await pollJobStatus(jobId);
+        if (!active) return;
         updateOptimizationJob(updated);
-        if (updated.status === 'completed' || updated.status === 'failed') {
-          clearInterval(interval);
-        }
+        if (updated.status === 'completed' || updated.status === 'failed') return; // stop
       } catch {
-        // silent
+        // silent — retry on the next tick
       }
-    }, 2000);
+      if (active) timer = setTimeout(tick, 10_000);
+    };
 
-    return () => clearInterval(interval);
-  }, [isPending, jobId, updateOptimizationJob, poll]);
+    tick(); // immediate first check, then self-schedules every 10s
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [isPending, jobId, updateOptimizationJob]);
 
   const atsScore = job?.result?.atsScore;
 
