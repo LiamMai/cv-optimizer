@@ -86,7 +86,7 @@ async function _ocrPdf(filePath: string): Promise<string> {
 async function _parsePdfWithPdfjs(filePath: string): Promise<string> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const data = new Uint8Array(await fs.readFile(filePath));
-  const doc = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
 
   const pageTexts: string[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
@@ -393,7 +393,7 @@ export async function extractPdfLinks(filePath: string): Promise<string[]> {
     // pdfjs-dist v4 is ESM-only; load the Node legacy build via dynamic import.
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const data = new Uint8Array(await fs.readFile(filePath));
-    const doc = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+    const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
     const urls: string[] = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
@@ -433,7 +433,7 @@ export async function extractPdfLinkAnchors(filePath: string): Promise<LinkAncho
   try {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const data = new Uint8Array(await fs.readFile(filePath));
-    const doc = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+    const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
     const anchors: LinkAnchor[] = [];
 
     for (let p = 1; p <= doc.numPages; p++) {
