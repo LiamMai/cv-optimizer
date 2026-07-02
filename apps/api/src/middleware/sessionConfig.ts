@@ -1,13 +1,14 @@
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { Pool } from 'pg';
+import type { RequestHandler } from 'express';
 
 const PgStore = connectPgSimple(session);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const TTL_HOURS = parseInt(process.env.SESSION_TTL_HOURS || '2');
 
-export const sessionMiddleware = session({
+export const sessionMiddleware: RequestHandler = session({
   store: new PgStore({ pool, createTableIfMissing: true }),
   secret: process.env.SESSION_SECRET!,
   resave: false,
