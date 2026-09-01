@@ -41,7 +41,7 @@ router.post('/analyze', requireAuth, (req: Request, res: Response, next: NextFun
       if (req.file) {
         // File was uploaded — parse it
         try {
-          jdText = await parseFile(req.file.path, req.file.mimetype);
+          jdText = (await parseFile(req.file.path, req.file.mimetype)).text;
         } catch (err) {
           throw createError(422, `Could not extract text from file: ${(err as Error).message}`);
         }

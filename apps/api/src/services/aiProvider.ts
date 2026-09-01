@@ -42,18 +42,34 @@ export interface SessionCredentials {
  * Free, keyless models exposed in the model picker. These run on the server's
  * shared Groq key (no per-user API key, no sign-in) — reliable and fast, unlike
  * the anonymous public endpoints which rate-limit and truncate long JSON output.
+ *
+ * Only list models Groq classifies as **Production** (models) or **Production Systems**
+ * (the `groq/compound*` agentic systems) — Preview-tier models "may be discontinued at
+ * short notice" per Groq's own docs, and that's exactly what happened here: Groq retired
+ * `llama-3.1-8b-instant`, `llama-3.3-70b-versatile`, and `llama-4-scout-17b-16e-instruct`
+ * within months of each other in mid-2026, breaking every non-gpt-oss entry this list used
+ * to have. Before adding a model back, verify its current tier — don't trust cached docs;
+ * hit `GET https://api.groq.com/openai/v1/models` with the server's own key, or check
+ * console.groq.com/docs/models / console.groq.com/docs/deprecations directly.
  */
 export const FREE_MODELS = [
   'openai/gpt-oss-120b',
   'openai/gpt-oss-20b',
-  // 30K TPM on Groq's free tier vs 8K for the gpt-oss models — the escape hatch when a
-  // long CV + JD blows the 413 "Request too large" TPM cap on the default model.
-  'meta-llama/llama-4-scout-17b-16e-instruct',
-  'llama-3.1-8b-instant',
+  // groq/compound-mini is a Production System (agentic, but tested clean on structured-JSON
+  // prompts) with 70K TPM on Groq's free tier vs 8K for the gpt-oss models — the escape
+  // hatch when a request 429s (rate limited) or 413s (blows the TPM cap) on an earlier
+  // model.
+  'groq/compound-mini',
+  // groq/compound (the full Compound system, not -mini) — same free-tier limits as
+  // compound-mini (30 RPM / 70K TPM) but its own separate quota bucket, so it's genuine
+  // extra reserve once compound-mini is also rate-limited. Listed last: unlike
+  // compound-mini, it hasn't been verified clean on this app's structured-JSON prompts —
+  // it's more agentic and more likely to wrap output in tool-call chatter. Watch
+  // `[aiProvider] ... falling back to groq/compound` in logs; demote/remove if it shows
+  // up paired with JSON-parse failures.
+  'groq/compound',
 ] as const;
 export const DEFAULT_FREE_MODEL = 'openai/gpt-oss-120b';
-/** Fallback when a request blows a smaller model's TPM cap (Groq 413) — biggest free limit. */
-export const LARGE_CONTEXT_FREE_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 // ---------------------------------------------------------------------------
 // Retry / timeout policy
@@ -348,6 +364,41 @@ async function callGroq(
   };
 }
 
+/** A model is out of capacity right now (429 rate limit) or can't take this request at
+ * all (413 too large) — either way, worth trying the next model instead of giving up. */
+function _isCapacityError(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  return status === 429 || status === 413;
+}
+
+/**
+ * Call Groq trying `models` in order, falling back to the next one only on a capacity
+ * error (429 rate limit or 413 too large) — anything else (auth, bad request) throws
+ * immediately. Each model still gets `_withRetry`'s own retries for transient failures
+ * before being counted as exhausted.
+ */
+async function _callGroqCascading(
+  apiKey: string,
+  messages: Message[],
+  options: CompletionOptions,
+  models: readonly string[]
+): Promise<CompletionResult> {
+  let lastErr: unknown;
+  for (let i = 0; i < models.length; i++) {
+    try {
+      return await callGroq(apiKey, messages, options, models[i]);
+    } catch (err) {
+      lastErr = err;
+      if (!_isCapacityError(err) || i === models.length - 1) throw err;
+      const status = (err as { status?: number }).status;
+      console.warn(
+        `[aiProvider] ${models[i]} hit a capacity limit (${status}); falling back to ${models[i + 1]}`
+      );
+    }
+  }
+  throw lastErr;
+}
+
 // ---------------------------------------------------------------------------
 // Session-based completion (primary path)
 // ---------------------------------------------------------------------------
@@ -378,27 +429,17 @@ export async function createCompletionFromSession(
       (FREE_MODELS as readonly string[]).includes(creds.model)
         ? creds.model
         : DEFAULT_FREE_MODEL;
-    // Groq free tier 413s when one request exceeds the model's TPM cap (8K on the
-    // gpt-oss models). Retrying the same model can't help — fall back once to the
-    // large-context free model (30K TPM) before giving up.
-    const tooLarge = (err: unknown) => (err as { status?: number })?.status === 413;
+    // Try the selected/default model first, then cascade through the rest of
+    // FREE_MODELS on a 429 (rate limit) or 413 (too large) — retrying the same
+    // model can't help with either, so move on instead of failing the job.
+    const ordered = [model, ...FREE_MODELS.filter((m) => m !== model)];
     try {
-      return await callGroq(serverKey, messages, options, model);
+      return await _callGroqCascading(serverKey, messages, options, ordered);
     } catch (err) {
-      if (!tooLarge(err)) throw err;
-      if (model !== LARGE_CONTEXT_FREE_MODEL) {
-        console.warn(
-          `[aiProvider] ${model} rejected the request as too large; retrying with ${LARGE_CONTEXT_FREE_MODEL}`
-        );
-        try {
-          return await callGroq(serverKey, messages, options, LARGE_CONTEXT_FREE_MODEL);
-        } catch (err2) {
-          if (!tooLarge(err2)) throw err2;
-        }
-      }
+      if (!_isCapacityError(err)) throw err;
       throw new Error(
-        'Your CV + job description is too large even for the largest free model. ' +
-          'Connect your own API key (Claude, OpenAI, Gemini, or Groq) to process it.'
+        'All free AI models are currently rate-limited or too small for this request. ' +
+          'Please try again shortly, or connect your own API key (Claude, OpenAI, Gemini, or Groq).'
       );
     }
   }
@@ -417,7 +458,9 @@ export async function createCompletionFromSession(
     case 'gemini':
       return callGeminiApiKey(apiKey, messages, options);
     case 'groq':
-      return callGroq(apiKey, messages, options);
+      // Same cascade as the free path: their own key still hits Groq's per-model TPM
+      // caps, so fall back through FREE_MODELS on a 429/413 instead of failing outright.
+      return _callGroqCascading(apiKey, messages, options, FREE_MODELS);
     default:
       throw new Error(`Unknown provider: ${String(creds)}`);
   }

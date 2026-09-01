@@ -132,6 +132,9 @@ router.get('/:jobId', (req: Request, res: Response, next: NextFunction) => {
       response.startedAt = job.startedAt;
       response.completedAt = job.completedAt;
       response.result = job.result;
+      // Style hints never flow through the AI rewrite — surface the original upload's,
+      // keyed by the job's cvId, so the live preview can match the exported PDF/DOCX font.
+      response.styleHints = cvStore.get(job.cvId)?.styleHints;
     }
 
     if (job.status === 'failed') {

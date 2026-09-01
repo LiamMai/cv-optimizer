@@ -14,11 +14,22 @@ export interface CVItem {
   description?: string;
 }
 
+/**
+ * Style hints recovered from the source file's own formatting (DOCX/PPTX run properties,
+ * best-effort PDF font-name sniffing). Undefined for TXT and OCR'd image sources.
+ */
+export interface StyleHints {
+  headingFont?: string;
+  bodyFont?: string;
+  accentColor?: string;
+}
+
 export interface ParsedCV {
   id: string;
   fileName: string;
   rawText: string;
   sections: CVSection[];
+  styleHints?: StyleHints;
 }
 
 export interface JDAnalysis {
@@ -90,6 +101,8 @@ export interface OptimizationResult {
   needsMoreInfo?: { section: string; question: string }[];
   /** The raw notes the user submitted — appended to when re-running with more notes. */
   sourceNotes?: string;
+  /** The original upload's style hints — never rewritten by the AI, looked up by cvId. */
+  styleHints?: StyleHints;
 }
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';

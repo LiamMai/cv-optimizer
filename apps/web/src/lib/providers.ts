@@ -15,9 +15,8 @@ export const PROVIDERS: ProviderInfo[] = [
     keyless: true,
     models: [
       { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (best quality)' },
-      { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B' },
-      { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout (long CVs — biggest free limit)' },
-      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (fastest)' },
+      { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (fastest)' },
+      { id: 'groq/compound-mini', name: 'Compound Mini (long CVs — biggest free limit)' },
     ],
   },
 ];

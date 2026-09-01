@@ -3,7 +3,7 @@
 // downloaded PDF: ruled section headers, justified summary, bulleted lists,
 // and entry rows with a bold title + right-aligned date range.
 
-export type InlineRun = { text: string; href?: string };
+export type InlineRun = { text: string; href?: string; bold?: boolean; italic?: boolean };
 
 export type CvBlock =
   | { kind: 'paragraph'; runs: InlineRun[] }
@@ -33,25 +33,48 @@ export function sectionKind(type: string): SectionKind {
 
 const DATE_RANGE = /\s*((?:\d{1,2}\/\d{4}|\w+\s+\d{4})\s*[-–]\s*(?:\d{1,2}\/\d{4}|\w+\s+\d{4}|present|current|now))\s*$/i;
 const INLINE_LINK = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)<]+)/g;
+const EMPHASIS = /\*\*([^*]+)\*\*|\*([^*]+)\*/g;
 
-/** Split text into runs, turning markdown links and bare URLs into linked runs. */
-export function parseInline(s: string): InlineRun[] {
+/** Split a plain (no emphasis) segment into runs, resolving markdown links / bare URLs. */
+function parseLinks(s: string, style: { bold?: boolean; italic?: boolean } = {}): InlineRun[] {
   const src = String(s);
   const runs: InlineRun[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
   INLINE_LINK.lastIndex = 0;
   while ((m = INLINE_LINK.exec(src)) !== null) {
-    if (m.index > last) runs.push({ text: src.slice(last, m.index) });
+    if (m.index > last) runs.push({ text: src.slice(last, m.index), ...style });
     if (m[1]) {
-      runs.push({ text: m[1], href: m[2] });
+      runs.push({ text: m[1], href: m[2], ...style });
     } else {
       const url = m[3].replace(/[.,;:]+$/, '');
-      runs.push({ text: url, href: url });
+      runs.push({ text: url, href: url, ...style });
     }
     last = m.index + m[0].length;
   }
-  if (last < src.length) runs.push({ text: src.slice(last) });
+  if (last < src.length) runs.push({ text: src.slice(last), ...style });
+  return runs;
+}
+
+/**
+ * Split text into runs, resolving bold/italic markdown (double/single asterisk wrapping) and,
+ * within each segment, markdown links / bare URLs. Mirrors the parsing in
+ * apps/api/src/services/exporter.ts (`_parseInlineRuns`) so the editor and the exported
+ * PDF/DOCX render the same emphasis.
+ */
+export function parseInline(s: string): InlineRun[] {
+  const src = String(s);
+  const runs: InlineRun[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  EMPHASIS.lastIndex = 0;
+  while ((m = EMPHASIS.exec(src)) !== null) {
+    if (m.index > last) runs.push(...parseLinks(src.slice(last, m.index)));
+    if (m[1] !== undefined) runs.push(...parseLinks(m[1], { bold: true }));
+    else runs.push(...parseLinks(m[2] as string, { italic: true }));
+    last = m.index + m[0].length;
+  }
+  if (last < src.length) runs.push(...parseLinks(src.slice(last)));
   return runs.length ? runs : [{ text: src }];
 }
 
@@ -60,7 +83,7 @@ function coalesceLines(content: string): string[] {
   const raw = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: string[] = [];
   for (const line of raw) {
-    const clean = line.replace(/^[-•*]\s*/, '');
+    const clean = line.replace(/^[-•*]\s+/, '');
     const prev = out.length ? out[out.length - 1] : '';
     const isContinuation =
       out.length > 0 &&
@@ -74,7 +97,7 @@ function coalesceLines(content: string): string[] {
 
 /** A line naming a role/company/date range — rendered as a bold entry header. */
 function isEntryHeader(line: string): boolean {
-  const t = line.replace(/^[-•*]\s*/, '').trim();
+  const t = line.replace(/^[-•*]\s+/, '').trim();
   if (!t) return false;
   if (/\b(\d{1,2}\/\d{4}|present)\b/i.test(t)) return true;
   if (/\s\/\s/.test(t) && t.length < 80) return true;
@@ -99,7 +122,7 @@ function formatParagraph(content: string): CvBlock[] {
 
 function formatList(content: string): CvBlock[] {
   return coalesceLines(content)
-    .flatMap((line) => splitCategoryRun(line.replace(/^[-•*]\s*/, '').trim()))
+    .flatMap((line) => splitCategoryRun(line.replace(/^[-•*]\s+/, '').trim()))
     .map((clean): CvBlock => {
       const m = clean.match(/^([A-Z][A-Za-z &/]{0,30}):\s*(.*)$/);
       if (m) return { kind: 'bullet', label: m[1], runs: parseInline(m[2]) };
@@ -110,7 +133,7 @@ function formatList(content: string): CvBlock[] {
 function formatEntries(content: string): CvBlock[] {
   const blocks: CvBlock[] = [];
   for (const line of coalesceLines(content)) {
-    const clean = line.replace(/^[-•*]\s*/, '').trim();
+    const clean = line.replace(/^[-•*]\s+/, '').trim();
     const isLabel = /^[A-Z][A-Za-z &/]{0,28}:/.test(clean);
     if (isEntryHeader(line) && !isLabel) {
       const m = clean.match(DATE_RANGE);
@@ -134,10 +157,15 @@ export function runsToText(runs: InlineRun[]): string {
   return runs.map((r) => r.text).join('');
 }
 
-/** Markdown text of a run sequence (round-trips links as [text](url)). */
+/** Markdown text of a run sequence (round-trips links as [text](url), bold as **text**, italic as *text*). */
 function runsToMarkdown(runs: InlineRun[]): string {
   return runs
-    .map((r) => (r.href && r.href !== r.text ? `[${r.text}](${r.href})` : r.text))
+    .map((r) => {
+      let t = r.href && r.href !== r.text ? `[${r.text}](${r.href})` : r.text;
+      if (r.bold) t = `**${t}**`;
+      else if (r.italic) t = `*${t}*`;
+      return t;
+    })
     .join('');
 }
 

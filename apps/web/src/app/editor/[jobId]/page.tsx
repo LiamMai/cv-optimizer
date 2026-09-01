@@ -74,9 +74,12 @@ export default function EditorPage({ params }: EditorPageProps) {
     if (hasResult || !jobId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    // Cancels the in-flight request on cleanup so a duplicate mount (React StrictMode in
+    // dev) can't leave its immediate first check as a stray, discarded network call.
+    const controller = new AbortController();
     const tick = async () => {
       try {
-        const fresh = await pollJobStatus(jobId);
+        const fresh = await pollJobStatus(jobId, controller.signal);
         if (cancelled) return;
         setOptimizationJob(fresh);
         if (fresh.status === 'pending' || fresh.status === 'processing') {
@@ -89,6 +92,7 @@ export default function EditorPage({ params }: EditorPageProps) {
     tick();
     return () => {
       cancelled = true;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [jobId, hasResult, setOptimizationJob]);
@@ -143,7 +147,7 @@ export default function EditorPage({ params }: EditorPageProps) {
     );
   }
 
-  const { originalSections, optimizedSections, diff, atsScore, contact } = job.result;
+  const { originalSections, optimizedSections, diff, atsScore, contact, styleHints } = job.result;
   const sortedOptimized = sortByPdfOrder(optimizedSections);
 
   const isModify = job.result.kind === 'modify';
@@ -346,7 +350,7 @@ export default function EditorPage({ params }: EditorPageProps) {
             <p className="text-xs text-slate-400">Your original document</p>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
-            <CvPage contact={contact}>
+            <CvPage contact={contact} styleHints={styleHints}>
               <FormattedCv sections={originalSections} />
             </CvPage>
           </div>
@@ -385,9 +389,9 @@ export default function EditorPage({ params }: EditorPageProps) {
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
             {rightView === 'preview' ? (
-              <PaginatedCv contact={contact} sections={resolvedSections} />
+              <PaginatedCv contact={contact} sections={resolvedSections} styleHints={styleHints} />
             ) : (
-              <CvPage contact={contact}>
+              <CvPage contact={contact} styleHints={styleHints}>
                 {sortedOptimized.map((section) => {
                   const ops = opsBySection[section.type];
                   const hasDiff = diff.some((d) => d.sectionType === section.type);

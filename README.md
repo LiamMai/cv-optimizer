@@ -1,16 +1,16 @@
 # CVOptimizer
 
-AI-powered resume builder that tailors your CV to any job description. Parses your existing CV, analyzes the JD, rewrites content for ATS compatibility, and preserves your original template.
+AI-powered resume builder that tailors your CV to any job description. Parses your existing CV, analyzes the JD, rewrites content for ATS compatibility, and — for DOCX/PPTX and best-effort PDF sources — carries the original's fonts, emphasis, and accent color into the export.
 
 **Live demo:** https://cv-optimizer-web-delta.vercel.app
 
 ## What it does
 
-1. **Upload CV** — PDF, DOCX, or paste text. Extracts all sections automatically.
+1. **Upload CV** — PDF, DOCX, PPTX, PNG/JPEG (via OCR), or paste text. Extracts all sections automatically; DOCX/PPTX and PDF also recover style hints (fonts, bold/italic, accent color) — OCR'd images carry text only, no style.
 2. **Paste JD** — Extracts required skills, keywords, seniority level, responsibilities.
-3. **AI Optimization** — Rewrites bullet points and sections to match the JD while keeping your original layout intact. Enforces human-like writing, no hallucination, measurable achievements.
+3. **AI Optimization** — Rewrites bullet points and sections to match the JD while keeping bold/italic emphasis intact. Enforces human-like writing, no hallucination, measurable achievements.
 4. **ATS Score** — 0–100 score with keyword gap analysis and section-by-section breakdown.
-5. **Edit & Export** — TipTap rich-text editor with accept/reject per-section diffs. Paginated A4 preview mirrors the PDF (Inter 11pt, same page-break rules — pages fill, and an entry header never separates from its first bullets). Export to PDF or DOCX.
+5. **Edit & Export** — TipTap rich-text editor with accept/reject per-section diffs. Paginated A4 preview mirrors the PDF (same fonts/sizes, style hints applied, same page-break rules — pages fill, and an entry header never separates from its first bullets). Export to PDF or DOCX.
 6. **Modify from your data** — Skip the JD: hand the AI free-form notes (new role, fresh metrics, projects to drop) and it folds them into the right sections, mirrors existing entry structure, re-sorts by date, and asks follow-up questions where your notes are too thin. Returns the same accept/reject diff as optimization.
 7. **History** — Every job is remembered locally (company, job title, ATS score, date) so you can re-open past results and track which companies you've applied to.
 
@@ -31,11 +31,10 @@ Pick how the AI runs from the **Connect Provider** screen. Three ways:
 | Model | Notes |
 |---|---|
 | `openai/gpt-oss-120b` | Default — best quality (8K TPM free limit) |
-| `openai/gpt-oss-20b` | 8K TPM free limit |
-| `meta-llama/llama-4-scout-17b-16e-instruct` | Long CVs — biggest free limit (30K TPM) |
-| `llama-3.1-8b-instant` | Fastest (6K TPM free limit) |
+| `openai/gpt-oss-20b` | Fastest (8K TPM free limit) |
+| `groq/compound-mini` | Long CVs — biggest free limit (70K TPM); also used automatically as the retry fallback when a request hits the 413 TPM cap on the default model |
 
-> **Note:** Free/OAuth tiers have rate limits. Responses may be slow or temporarily unavailable under load.
+> **Note:** Free/OAuth tiers have rate limits. Responses may be slow or temporarily unavailable under load. Groq has repeatedly deprecated non-`gpt-oss` free models on short notice (three in mid-2026 alone) — verify a model's current status at [console.groq.com/docs/models](https://console.groq.com/docs/models) before relying on it long-term.
 
 ---
 
@@ -47,7 +46,7 @@ Pick how the AI runs from the **Connect Provider** screen. Three ways:
 | Backend | Node.js, Express, TypeScript |
 | AI | Anthropic Claude, OpenAI, Google Gemini, Groq — selectable per session |
 | Database | PostgreSQL via Prisma ORM |
-| Parsers | `pdfjs-dist` + `pdf-parse` (PDF), `tesseract.js` + `pdf-to-img` (OCR fallback), `mammoth` (DOCX) |
+| Parsers | `pdfjs-dist` + `pdf-parse` (PDF), `tesseract.js` + `pdf-to-img` (OCR), `jszip` + `fast-xml-parser` (DOCX/PPTX) |
 | Export | `puppeteer` (PDF, HTML→Chromium template; `pdfkit` fallback), `docx` (DOCX), `archiver` |
 | Package manager | pnpm |
 
@@ -329,15 +328,19 @@ Returns: `coveredKeywords`, `missingKeywords`, `weakSections`, `suggestions`.
 
 ## Supported File Types
 
-| Type | Parser |
-|---|---|
-| `.pdf` | `pdfjs-dist` (primary, preserves reading order) → `pdf-parse` (fallback) → `tesseract.js` OCR (last resort) |
-| `.docx` | `mammoth` |
-| `.txt` | `fs.readFile` |
+| Type | Parser | Style hints |
+|---|---|---|
+| `.pdf` | `pdfjs-dist` (primary, preserves reading order) → `pdf-parse` (fallback) → `tesseract.js` OCR (last resort) | Best-effort: dominant body font + bold-line guess from the resolved font name. No color (not exposed by `getTextContent()`). None when the OCR fallback fires. |
+| `.docx` | Direct `word/document.xml` walk (`jszip` + `fast-xml-parser`) | Heading/body font, bold/italic per run, accent color from heading runs. |
+| `.pptx` | Direct slide XML walk (`jszip` + `fast-xml-parser`), slide order resolved via `presentation.xml.rels` | Dominant font + accent color across all runs (no heading/body distinction). |
+| `.png` / `.jpg` / `.jpeg` | `tesseract.js` OCR | None — a photo/scan carries no extractable font/color/layout. |
+| `.txt` | `fs.readFile` | None. |
 
 Max upload size: **10 MB** (configurable via `API_MAX_FILE_SIZE_MB`).
 
-**Image-only / scanned PDFs:** when text extraction yields fewer than 50 chars (no text layer — scanned pages or text exported as vector outlines), the parser renders each page to a PNG via `pdf-to-img` and OCRs it with `tesseract.js` (English). OCR is slow (~1s/page) and runs only as a fallback. First run downloads the tesseract language data from a CDN, so the API host must allow outbound network (or the data must be pre-cached).
+**Image-only / scanned PDFs:** when text extraction yields fewer than 50 chars (no text layer — scanned pages or text exported as vector outlines), the parser renders each page to a PNG via `pdf-to-img` and OCRs it with `tesseract.js` (English). OCR is slow (~1s/page) and runs only as a fallback. First run downloads the tesseract language data from a CDN, so the API host must allow outbound network (or the data must be pre-cached). Standalone image uploads (PNG/JPEG) OCR the same way, directly.
+
+**Style-aware export:** recovered style hints (`CVRecord.styleHints` — heading/body font, accent color) are stored per upload and applied at export time instead of the previous single hardcoded template. The Puppeteer/HTML and web-preview renderers bucket a detected font into a small curated Google-Fonts-safe set (serif/sans/monospace); the pdfkit fallback buckets into the 14 standard PDF fonts (no arbitrary font embedding); the DOCX exporter passes the detected font name through literally, since it renders client-side in the user's own Word. Bold/italic emphasis (`**bold**`/`*italic*`) is carried as markdown through the same plain-text section pipeline used for links, and rendered by all three exporters plus the editor preview. Hints are keyed off the *original* upload (`cvId`) and looked up separately for AI-optimized exports, since the AI rewrite never touches them.
 
 ---
 

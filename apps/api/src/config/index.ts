@@ -94,7 +94,10 @@ const config: AppConfig = {
     allowedMimeTypes: [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'text/plain',
+      'image/png',
+      'image/jpeg',
     ],
   },
 

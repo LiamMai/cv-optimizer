@@ -36,6 +36,17 @@ export interface CVSections {
   raw: string;
 }
 
+/**
+ * Style hints recovered from the source file's own formatting (DOCX/PPTX run properties,
+ * best-effort PDF font-name sniffing). Undefined for TXT and OCR'd image sources, which carry
+ * no extractable style — those exports fall back to the default template unchanged.
+ */
+export interface StyleHints {
+  headingFont?: string;
+  bodyFont?: string;
+  accentColor?: string;
+}
+
 export interface CVRecord {
   id: string;
   fileName: string;
@@ -44,6 +55,7 @@ export interface CVRecord {
   fileSize: number;
   originalText: string;
   sections: CVSections;
+  styleHints?: StyleHints;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,10 +77,13 @@ router.post('/upload', handleUpload, async (req: Request, res: Response, next: N
 
     const { path: filePath, mimetype, originalname, size } = req.file;
 
-    // Parse raw text from the file
+    // Parse raw text (+ any recoverable style hints) from the file
     let rawText: string;
+    let styleHints: StyleHints | undefined;
     try {
-      rawText = await parseFile(filePath, mimetype);
+      const parsed = await parseFile(filePath, mimetype);
+      rawText = parsed.text;
+      styleHints = parsed.styleHints;
     } catch (err) {
       // Clean up the uploaded file if parsing fails
       fs.unlink(filePath, () => {});
@@ -108,6 +123,7 @@ router.post('/upload', handleUpload, async (req: Request, res: Response, next: N
       fileSize: size,
       originalText: rawText,
       sections,
+      styleHints,
       createdAt: now,
       updatedAt: now,
     };
@@ -118,6 +134,50 @@ router.post('/upload', handleUpload, async (req: Request, res: Response, next: N
     const { filePath: _fp, ...safeRecord } = cvRecord;
     res.status(201).json({
       message: 'CV uploaded and parsed successfully.',
+      cv: safeRecord,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/cv/upload-text — pasted CV text, JSON body { text }
+// ---------------------------------------------------------------------------
+const UploadTextSchema = z.object({
+  text: z.string().min(50, 'CV text must be at least 50 characters.'),
+});
+
+router.post('/upload-text', express.json(), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = UploadTextSchema.safeParse(req.body);
+    if (!parsed.success) throw parsed.error;
+
+    const rawText = parsed.data.text;
+
+    // Extract structured sections — no file to parse (so no style hints, no PDF link
+    // recovery), unlike the multipart /upload path.
+    const sections = extractSections(rawText);
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const cvRecord: CVRecord = {
+      id,
+      fileName: 'pasted-cv.txt',
+      filePath: '',
+      mimetype: 'text/plain',
+      fileSize: Buffer.byteLength(rawText, 'utf8'),
+      originalText: rawText,
+      sections,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    cvStore.set(id, cvRecord);
+
+    const { filePath: _fp, ...safeRecord } = cvRecord;
+    res.status(201).json({
+      message: 'CV text parsed successfully.',
       cv: safeRecord,
     });
   } catch (err) {

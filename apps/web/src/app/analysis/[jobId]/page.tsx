@@ -48,19 +48,22 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
 
     // Single self-scheduling poller: each tick waits for its response before scheduling
     // the next, so slow responses can't pile up overlapping requests. The `active` flag
-    // ensures a duplicate mount (React StrictMode in dev) or unmount can't leave a second
-    // poller running — which is what caused the bursts of optimize calls.
+    // stops a torn-down instance from processing a late response or scheduling another
+    // poll; the AbortController additionally cancels the in-flight request itself, so a
+    // duplicate mount (React StrictMode in dev, which mounts/cleans-up/remounts once) or
+    // a real unmount can't leave its very first, immediate check as a stray network call.
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
 
     const tick = async () => {
       try {
-        const updated = await pollJobStatus(jobId);
+        const updated = await pollJobStatus(jobId, controller.signal);
         if (!active) return;
         updateOptimizationJob(updated);
         if (updated.status === 'completed' || updated.status === 'failed') return; // stop
       } catch {
-        // silent — retry on the next tick
+        // silent — retry on the next tick (or dropped if aborted, since `active` is false by then)
       }
       if (active) timer = setTimeout(tick, 10_000);
     };
@@ -69,6 +72,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
 
     return () => {
       active = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [isPending, jobId, updateOptimizationJob]);

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CVContact, CVSection } from '@/lib/types';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CVContact, CVSection, StyleHints } from '@/lib/types';
 import { formatSection, type CvBlock, type InlineRun } from '@/lib/cvFormat';
 
 // Section display order + labels, matching the PDF export template.
@@ -50,30 +50,101 @@ export function sortByPdfOrder(sections: CVSection[]): CVSection[] {
 // (set on <html> in layout.tsx) — the literal "Inter" only matches a locally installed copy.
 const PAPER_FONT = 'var(--font-inter), Inter, "Helvetica Neue", Helvetica, Arial, "Segoe UI", sans-serif';
 
+interface FontChoice {
+  stack: string;
+  googleSpec: string;
+}
+
+const FONT_SANS: FontChoice = { stack: PAPER_FONT, googleSpec: 'Inter:wght@400;700' };
+const FONT_SERIF: FontChoice = {
+  stack: '"Merriweather", Georgia, "Times New Roman", Times, serif',
+  googleSpec: 'Merriweather:wght@400;700',
+};
+const FONT_MONO: FontChoice = {
+  stack: '"Roboto Mono", "Courier New", Courier, monospace',
+  googleSpec: 'Roboto+Mono:wght@400;700',
+};
+// Metric-compatible substitutes for common corporate/Office fonts — mirrors the equivalent
+// constants in the server-side exporter (apps/api/src/services/exporter.ts).
+const FONT_CARLITO: FontChoice = { // Calibri
+  stack: '"Carlito", Calibri, Inter, "Segoe UI", sans-serif',
+  googleSpec: 'Carlito:wght@400;700',
+};
+const FONT_ARIMO: FontChoice = { // Arial / Helvetica
+  stack: '"Arimo", Arial, Helvetica, sans-serif',
+  googleSpec: 'Arimo:wght@400;700',
+};
+const FONT_TINOS: FontChoice = { // Times New Roman
+  stack: '"Tinos", "Times New Roman", Times, serif',
+  googleSpec: 'Tinos:wght@400;700',
+};
+const FONT_GELASIO: FontChoice = { // Georgia
+  stack: '"Gelasio", Georgia, serif',
+  googleSpec: 'Gelasio:wght@400;700',
+};
+const FONT_CALADEA: FontChoice = { // Cambria
+  stack: '"Caladea", Cambria, Georgia, serif',
+  googleSpec: 'Caladea:wght@400;700',
+};
+
+/** Bucket a detected font name to a small curated set — mirrors `_htmlFontFor` in the
+ *  server-side exporter (apps/api/src/services/exporter.ts) so the preview matches the PDF. */
+function fontChoiceFor(fontName: string | undefined): FontChoice {
+  const n = (fontName || '').toLowerCase();
+  if (/calibri/.test(n)) return FONT_CARLITO;
+  if (/cambria/.test(n)) return FONT_CALADEA;
+  if (/georgia/.test(n)) return FONT_GELASIO;
+  if (/times/.test(n)) return FONT_TINOS;
+  if (/arial|helvetica/.test(n)) return FONT_ARIMO;
+  if (/mono|courier|consolas|menlo|code/.test(n)) return FONT_MONO;
+  if (!/sans/.test(n) && /serif|garamond|book|palatino|minion/.test(n)) return FONT_SERIF;
+  return FONT_SANS;
+}
+
+/** Load a non-default Google Fonts family client-side (the default sans bucket is already
+ *  loaded via next/font in layout.tsx) so a detected font actually renders in the preview
+ *  instead of silently falling back. */
+function useGoogleFont(spec: string): void {
+  useEffect(() => {
+    if (spec === FONT_SANS.googleSpec) return;
+    const href = `https://fonts.googleapis.com/css2?family=${spec}&display=swap`;
+    if (document.querySelector(`link[href="${href}"]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }, [spec]);
+}
+
 // A4 geometry, mirroring the PDF export margins (14mm vertical / 16mm horizontal).
 const MM_TO_PX = 96 / 25.4;
 const PAGE_W_PX = Math.round(210 * MM_TO_PX); // ≈ 794
 const PAGE_CONTENT_H_PX = (297 - 14 * 2) * MM_TO_PX; // ≈ 1017
 
-/** Inline text with clickable links. */
+// Base body font size (pt) the atoms are laid out at before any fit-scale is applied —
+// mirrors `BASE_PT`/`html { font-size: 11pt }` in the server's exporter.ts template.
+const BASE_PT = 11;
+// Fit-scale search bounds and page-fill targets — mirror `_fitToPages` in exporter.ts
+// exactly so the preview lands on the same page count/scale as the exported PDF.
+const FIT_MIN = 0.85;
+const FIT_MAX = 1.22;
+
+/** Inline text with clickable links and bold/italic emphasis. */
 export function InlineRuns({ runs }: { runs: InlineRun[] }) {
   return (
     <>
-      {runs.map((r, i) =>
-        r.href ? (
-          <a
-            key={i}
-            href={r.href}
-            target="_blank"
-            rel="noreferrer"
-            className="text-blue-700 underline"
-          >
+      {runs.map((r, i) => {
+        let node: React.ReactNode = r.href ? (
+          <a href={r.href} target="_blank" rel="noreferrer" className="text-blue-700 underline">
             {r.text}
           </a>
         ) : (
-          <React.Fragment key={i}>{r.text}</React.Fragment>
-        )
-      )}
+          r.text
+        );
+        if (r.bold) node = <strong>{node}</strong>;
+        if (r.italic) node = <em>{node}</em>;
+        return <React.Fragment key={i}>{node}</React.Fragment>;
+      })}
     </>
   );
 }
@@ -81,16 +152,16 @@ export function InlineRuns({ runs }: { runs: InlineRun[] }) {
 /** Ruled, uppercase section heading like the PDF. */
 export function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mb-2 mt-5 flex items-center gap-2 border-b border-slate-900 pb-1 text-[13pt] font-bold uppercase tracking-wide text-slate-900">
+    <h2 className="mb-2 mt-5 flex items-center gap-2 border-b border-slate-900 pb-1 text-[1.18em] font-bold uppercase tracking-wide text-slate-900">
       {children}
     </h2>
   );
 }
 
 const LI_CLASS =
-  "relative mb-1 pl-4 text-justify text-[11pt] leading-[1.45] text-slate-800 before:absolute before:left-0 before:text-slate-900 before:content-['•']";
-const PARA_CLASS = 'text-justify text-[11pt] leading-[1.45] text-slate-800';
-const ENTRY_TITLE_CLASS = 'text-[11pt] font-bold text-slate-900';
+  "relative mb-1 pl-4 text-justify text-[1em] leading-[1.45] text-slate-800 before:absolute before:left-0 before:text-slate-900 before:content-['•']";
+const PARA_CLASS = 'text-justify text-[1em] leading-[1.45] text-slate-800';
+const ENTRY_TITLE_CLASS = 'text-[1em] font-bold text-slate-900';
 
 function BulletItem({ b }: { b: Extract<CvBlock, { kind: 'bullet' }> }) {
   return (
@@ -168,20 +239,20 @@ function CvHeader({ contact }: { contact?: CVContact }) {
   return (
     <header className="mb-2">
       {name && (
-        <div className="text-center text-[25pt] font-bold leading-tight tracking-[2px] text-slate-900">
+        <div className="text-center text-[2.27em] font-bold leading-tight tracking-[2px] text-slate-900">
           {name}
         </div>
       )}
       {title && (
-        <div className="mt-1 text-center text-[15pt] font-bold uppercase tracking-wider text-slate-800">
+        <div className="mt-1 text-center text-[1.36em] font-bold uppercase tracking-wider text-slate-800">
           {title}
         </div>
       )}
       {contactLine && (
-        <div className="mt-2 text-center text-[10pt] text-slate-600">{contactLine}</div>
+        <div className="mt-2 text-center text-[0.9em] text-slate-600">{contactLine}</div>
       )}
       {links.length > 0 && (
-        <div className="mt-1 text-center text-[10pt]">
+        <div className="mt-1 text-center text-[0.9em]">
           {links.map((l, i) => (
             <React.Fragment key={l.href}>
               {i > 0 && <span className="mx-2 text-slate-400">•</span>}
@@ -200,14 +271,18 @@ function CvHeader({ contact }: { contact?: CVContact }) {
 export function CvPage({
   contact,
   children,
+  styleHints,
 }: {
   contact?: CVContact;
   children: React.ReactNode;
+  styleHints?: StyleHints;
 }) {
+  const bodyFont = fontChoiceFor(styleHints?.bodyFont);
+  useGoogleFont(bodyFont.googleSpec);
   return (
     <div
       className="mx-auto max-w-[760px] rounded-lg bg-white px-8 py-10 shadow-sm ring-1 ring-slate-200 sm:px-12"
-      style={{ fontFamily: PAPER_FONT }}
+      style={{ fontFamily: bodyFont.stack }}
     >
       <CvHeader contact={contact} />
       {children}
@@ -265,10 +340,6 @@ interface Segment {
   i: number;
   clip?: { top: number; height: number };
 }
-
-// Cap on how much room a non-entry atom (paragraph, list bullet) can demand at a
-// page bottom before it simply jumps to the next page.
-const LEAD_CAP_PX = PAGE_CONTENT_H_PX * 0.2;
 
 function buildAtoms(contact: CVContact | undefined, sections: CVSection[]): Atom[] {
   const atoms: Atom[] = [];
@@ -404,19 +475,31 @@ function paginate(atoms: Atom[], extents: number[], metas: (AtomMeta | null)[]):
     for (let j = a; j < b; j++) s += extents[j];
     return s;
   };
-  // The unbreakable lead chunk of a group: the header plus the start of its first
-  // bullet — two lines if the bullet can split, the whole bullet otherwise.
+  // The lead an atom needs before it may break: two lines if it can split
+  // (print orphans/widows), the whole atom otherwise.
+  const leadOf = (i: number) => {
+    const m = metas[i];
+    return m && m.lines >= 4 ? 2 * m.lineH : extents[i];
+  };
+  // The unbreakable lead chunk of a group: the header, plus any run of one-line bullets
+  // right after it (e.g. "Role:"/"Team Size:" style metadata — breaking right after those
+  // strands them with the header while the entry's real content lands alone on the next
+  // page), plus the start of the first bullet substantial enough to split.
   const minChunk = (i: number, end: number) => {
-    if (i + 1 >= end) return extents[i];
-    const m = metas[i + 1];
-    const firstLead = m && m.lines >= 4 ? 2 * m.lineH : extents[i + 1];
-    return extents[i] + firstLead;
+    let total = extents[i];
+    let j = i + 1;
+    while (j < end && metas[j] && metas[j]!.lines === 1) {
+      total += extents[j];
+      j++;
+    }
+    if (j < end) total += leadOf(j);
+    return total;
   };
   // Height the unit starting at atom i needs on the current page before it may break.
   const leadNeed = (i: number): number => {
     if (i >= atoms.length) return 0;
     if (atoms[i].groupId != null) return minChunk(i, groupEnd(i));
-    return Math.min(extents[i], LEAD_CAP_PX);
+    return leadOf(i);
   };
 
   let i = 0;
@@ -449,29 +532,40 @@ function paginate(atoms: Atom[], extents: number[], metas: (AtomMeta | null)[]):
 
 /**
  * A4-paginated CV preview matching the downloaded PDF: same fonts/sizes, same
- * page-break rules. Renders the atoms once into a hidden measurer, distributes
- * them into pages by measured height, and scales pages down to fit the pane.
+ * page-break rules, and the same font-scale fit pass the exporter runs (`_fitToPages`
+ * in exporter.ts) — so this renders the same page count and breaks as the exported PDF.
+ * Renders the atoms once into a hidden measurer, distributes them into pages by
+ * measured height, and separately scales pages down to fit the viewport pane.
  */
 export function PaginatedCv({
   contact,
   sections,
+  styleHints,
 }: {
   contact?: CVContact;
   sections: CVSection[];
+  styleHints?: StyleHints;
 }) {
+  const bodyFont = fontChoiceFor(styleHints?.bodyFont);
+  useGoogleFont(bodyFont.googleSpec);
   const atoms = useMemo(() => buildAtoms(contact, sections), [contact, sections]);
   const measureRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<Segment[][] | null>(null);
+  const [fitPt, setFitPt] = useState(BASE_PT);
   const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
     let cancelled = false;
-    const measure = () => {
+    // Measure the atoms at a given root font-size (pt) and paginate them.
+    // Mutates the hidden measurer's font-size directly so each search step reflows
+    // synchronously — cheap in a live DOM, unlike the server's Puppeteer round-trips.
+    const measureAt = (pt: number): { result: Segment[][]; bottom: number } | null => {
       const el = measureRef.current;
-      if (cancelled || !el) return;
+      if (!el) return null;
+      el.style.fontSize = `${pt}pt`;
       const children = Array.from(el.children) as HTMLElement[];
-      if (children.length !== atoms.length) return;
+      if (children.length !== atoms.length) return null;
       const tops = children.map((c) => c.offsetTop);
       const extents = children.map(
         (c, i) => (i + 1 < children.length ? tops[i + 1] : el.scrollHeight) - tops[i]
@@ -486,7 +580,46 @@ export function PaginatedCv({
         if (!lineH || !isFinite(lineH)) return null;
         return { contentH, lineH, lines: Math.max(1, Math.round(contentH / lineH)) };
       });
-      setPages(paginate(atoms, extents, metas));
+      const result = paginate(atoms, extents, metas);
+      const bottom = tops.length ? tops[tops.length - 1] + extents[extents.length - 1] : 0;
+      return { result, bottom };
+    };
+    const measure = () => {
+      if (cancelled || !measureRef.current) return;
+      let pt = BASE_PT;
+      let m = measureAt(pt);
+      if (!m) return;
+      // Same shrink/grow search as `_fitToPages` in exporter.ts, but re-measuring
+      // exactly on every step instead of assuming a linear scale-to-height relation.
+      for (let i = 0; i < 6; i++) {
+        const scaleNow = pt / BASE_PT;
+        const bottomAtScale1 = m.bottom / scaleNow;
+        const pageCount = m.result.length;
+        if (pageCount > 1) {
+          const sReq = ((pageCount - 1) * PAGE_CONTENT_H_PX * 0.985) / bottomAtScale1;
+          if (sReq >= FIT_MIN && sReq < scaleNow - 0.005) {
+            const next = measureAt(sReq * BASE_PT);
+            if (!next) break;
+            pt = sReq * BASE_PT;
+            m = next;
+            continue;
+          }
+        }
+        if (pageCount === 1 && scaleNow < FIT_MAX) {
+          const target = Math.min(FIT_MAX, (PAGE_CONTENT_H_PX * 0.94) / bottomAtScale1);
+          if (target > scaleNow + 0.005) {
+            const next = measureAt(target * BASE_PT);
+            if (!next) break;
+            pt = target * BASE_PT;
+            m = next;
+            continue;
+          }
+        }
+        break;
+      }
+      if (cancelled) return;
+      setFitPt(pt);
+      setPages(m.result);
     };
     measure();
     // Re-measure once webfonts finish loading — Inter metrics change line wraps.
@@ -526,7 +659,7 @@ export function PaginatedCv({
     );
 
   return (
-    <div ref={wrapRef} style={{ fontFamily: PAPER_FONT }}>
+    <div ref={wrapRef} style={{ fontFamily: bodyFont.stack, fontSize: `${fitPt}pt` }}>
       {/* Hidden measurer at true A4 content width. */}
       <div
         ref={measureRef}

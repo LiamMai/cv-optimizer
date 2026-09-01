@@ -24,6 +24,18 @@ const storage = multer.diskStorage({
   },
 });
 
+const MIME_LABELS: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPTX',
+  'text/plain': 'TXT',
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+};
+const ACCEPTED_LABEL = config.upload.allowedMimeTypes
+  .map((m) => MIME_LABELS[m] || m)
+  .join(', ');
+
 function fileFilter(_req: Request, file: Express.Multer.File, cb: FileFilterCallback): void {
   if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
@@ -31,7 +43,7 @@ function fileFilter(_req: Request, file: Express.Multer.File, cb: FileFilterCall
     cb(
       new multer.MulterError(
         'LIMIT_UNEXPECTED_FILE',
-        `Unsupported file type: ${file.mimetype}. Accepted: PDF, DOCX, TXT`
+        `Unsupported file type: ${file.mimetype}. Accepted: ${ACCEPTED_LABEL}`
       )
     );
   }

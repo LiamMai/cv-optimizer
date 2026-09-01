@@ -1,6 +1,6 @@
 import express, { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { cvStore } from './cv';
+import { cvStore, StyleHints } from './cv';
 import { jobStore } from './optimize';
 import { exportToPDF, exportToDOCX } from '../services/exporter';
 import { createError } from '../middleware/errorHandler';
@@ -25,6 +25,7 @@ const ExportSchema = z.object({
 interface ResolvedSections {
   sections: CVSections;
   fileName: string;
+  styleHints?: StyleHints;
 }
 
 // Keys a client may override via `sections` in the export request body —
@@ -60,14 +61,16 @@ function _resolveSections(body: { cvId?: string; jobId?: string; sections?: Reco
         }
       }
     }
-    return { sections, fileName: `${baseName}_optimized` };
+    // Style hints deliberately don't flow through the AI rewrite — look them up on the
+    // original upload instead, keyed by the job's cvId.
+    return { sections, fileName: `${baseName}_optimized`, styleHints: cvRecord?.styleHints };
   }
 
   if (body.cvId) {
     const cvRecord = cvStore.get(body.cvId);
     if (!cvRecord) throw createError(404, `CV "${body.cvId}" not found.`);
     const baseName = cvRecord.fileName.replace(/\.[^.]+$/, '');
-    return { sections: cvRecord.sections, fileName: baseName };
+    return { sections: cvRecord.sections, fileName: baseName, styleHints: cvRecord.styleHints };
   }
 
   throw createError(400, 'Neither cvId nor jobId was provided.');
@@ -81,9 +84,9 @@ router.post('/pdf', express.json(), async (req: Request, res: Response, next: Ne
     const parsed = ExportSchema.safeParse(req.body);
     if (!parsed.success) throw parsed.error;
 
-    const { sections, fileName } = _resolveSections(parsed.data);
+    const { sections, fileName, styleHints } = _resolveSections(parsed.data);
 
-    const { buffer, mimeType, extension } = await exportToPDF(sections);
+    const { buffer, mimeType, extension } = await exportToPDF(sections, {}, styleHints);
 
     const downloadName = `${fileName}.${extension}`;
     res.setHeader('Content-Type', mimeType);
@@ -103,9 +106,9 @@ router.post('/docx', express.json(), async (req: Request, res: Response, next: N
     const parsed = ExportSchema.safeParse(req.body);
     if (!parsed.success) throw parsed.error;
 
-    const { sections, fileName } = _resolveSections(parsed.data);
+    const { sections, fileName, styleHints } = _resolveSections(parsed.data);
 
-    const { buffer, mimeType, extension } = await exportToDOCX(sections);
+    const { buffer, mimeType, extension } = await exportToDOCX(sections, styleHints);
 
     const downloadName = `${fileName}.${extension}`;
     res.setHeader('Content-Type', mimeType);

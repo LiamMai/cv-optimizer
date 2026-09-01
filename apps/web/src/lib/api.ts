@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ParsedCV, JDAnalysis, OptimizationConfig, OptimizationJob, AuthState } from './types';
+import type { ParsedCV, JDAnalysis, OptimizationConfig, OptimizationJob, AuthState, StyleHints } from './types';
 
 const api = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1`,
@@ -93,6 +93,7 @@ interface RawOptimizeJobResponse {
   config?: Record<string, unknown>;
   status?: 'pending' | 'running' | 'completed' | 'failed';
   error?: string;
+  styleHints?: StyleHints;
   result?: {
     atsScore?: RawAtsScore & { optimized?: RawAtsScore };
     originalSections?: RawSections;
@@ -118,8 +119,8 @@ function _sectionsObjToArray(obj: Record<string, unknown> | null | undefined): i
     }));
 }
 
-export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
-  const response = await api.get<RawOptimizeJobResponse>(`/optimize/${jobId}`);
+export async function pollJobStatus(jobId: string, signal?: AbortSignal): Promise<OptimizationJob> {
+  const response = await api.get<RawOptimizeJobResponse>(`/optimize/${jobId}`, { signal });
   const data = response.data;
 
   // API returns `jobId` not `id`, and `running` not `processing`
@@ -172,6 +173,7 @@ export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
       removed: data.result.removed,
       needsMoreInfo: data.result.needsMoreInfo,
       sourceNotes: data.result.userData,
+      styleHints: data.styleHints,
     };
   }
 
@@ -219,8 +221,8 @@ export async function getCV(id: string): Promise<ParsedCV> {
 }
 
 // Auth endpoints
-export const checkAuth = (): Promise<AuthState> =>
-  api.get('/auth/me').then(r => r.data);
+export const checkAuth = (signal?: AbortSignal): Promise<AuthState> =>
+  api.get('/auth/me', { signal }).then(r => r.data);
 
 export const logout = (): Promise<void> =>
   api.delete('/auth/logout').then(() => undefined);

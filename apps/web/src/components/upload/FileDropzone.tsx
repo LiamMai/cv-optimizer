@@ -19,7 +19,10 @@ export function FileDropzone({
   accept = {
     'application/pdf': ['.pdf'],
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-    'application/msword': ['.doc'],
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+    'text/plain': ['.txt'],
+    'image/png': ['.png'],
+    'image/jpeg': ['.jpg', '.jpeg'],
   },
   label = 'Drop your CV here',
   maxSize = 10 * 1024 * 1024, // 10 MB
