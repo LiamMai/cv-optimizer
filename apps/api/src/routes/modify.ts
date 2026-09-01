@@ -6,6 +6,7 @@ import { jobStore, OptimizationJob } from './optimize';
 import { modify } from '../services/cvModifier';
 import { createError } from '../middleware/errorHandler';
 import { requireAuth } from '../middleware/requireAuth';
+import type { SessionCredentials } from '../services/aiProvider';
 
 const router: Router = express.Router();
 
@@ -61,7 +62,7 @@ router.post('/', requireAuth, express.json(), async (req: Request, res: Response
     jobStore.set(jobId, job);
 
     // Snapshot session credentials now — session won't be accessible in the async runner
-    const sessionSnapshot = { credentials: (req.session as any).credentials };
+    const sessionSnapshot = { credentials: req.session.credentials };
 
     _runModifyJob(jobId, cvRecord, userData, config, sessionSnapshot).catch((err: Error) => {
       console.error(`[modify] Job ${jobId} threw unexpectedly:`, err);
@@ -85,7 +86,7 @@ async function _runModifyJob(
   cvRecord: CVRecord,
   userData: string,
   config: Record<string, unknown>,
-  session?: { credentials?: any }
+  session?: { credentials?: SessionCredentials }
 ): Promise<void> {
   const job = jobStore.get(jobId);
   if (!job) return;

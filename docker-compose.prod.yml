@@ -64,7 +64,7 @@ services:
     expose:
       - '3000'
     env_file:
-      - ./apps/web/.env.prod
+      - ./.env.prod
     environment:
       NODE_ENV: production
     depends_on:
@@ -98,7 +98,7 @@ services:
     expose:
       - '3001'
     env_file:
-      - ./apps/api/.env.prod
+      - ./.env.prod
     environment:
       NODE_ENV: production
     depends_on:

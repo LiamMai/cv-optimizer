@@ -9,7 +9,11 @@ const router: Router = express.Router();
 const ALLOWED_PROVIDERS = ['claude', 'openai', 'gemini', 'groq'] as const;
 type AllowedProvider = (typeof ALLOWED_PROVIDERS)[number];
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+function isAllowedProvider(provider: string): provider is AllowedProvider {
+  return (ALLOWED_PROVIDERS as readonly string[]).includes(provider);
+}
+
+const FRONTEND_URL = process.env.API_FRONTEND_URL || 'http://localhost:3000';
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/auth/google — redirect to Google OAuth consent screen
@@ -46,14 +50,14 @@ router.get('/google/callback', async (req: Request, res: Response, next: NextFun
     const userInfo = await getUserInfo(tokens.access_token);
 
     // Encrypt tokens and store in session
-    (req.session as any).credentials = {
+    req.session.credentials = {
       provider: 'gemini-oauth',
       encryptedAccessToken: encrypt(tokens.access_token),
       encryptedRefreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : undefined,
       tokenExpiry: tokens.expiry_date ?? Date.now() + 3600000,
     };
 
-    (req.session as any).user = {
+    req.session.user = {
       email: userInfo.email || '',
       name: userInfo.name || '',
       picture: userInfo.picture || undefined,
@@ -75,7 +79,7 @@ router.post('/api-key', express.json(), async (req: Request, res: Response, next
   try {
     const { provider, apiKey } = req.body as { provider?: string; apiKey?: string };
 
-    if (!provider || !ALLOWED_PROVIDERS.includes(provider as AllowedProvider)) {
+    if (!provider || !isAllowedProvider(provider)) {
       return res.status(400).json({
         error: 'Invalid provider',
         message: `provider must be one of: ${ALLOWED_PROVIDERS.join(', ')}`,
@@ -90,7 +94,7 @@ router.post('/api-key', express.json(), async (req: Request, res: Response, next
     }
 
     // Encrypt and store — never echo back
-    (req.session as any).credentials = {
+    req.session.credentials = {
       provider,
       encryptedApiKey: encrypt(apiKey.trim()),
     };
@@ -120,7 +124,7 @@ router.post('/free', express.json(), (req: Request, res: Response, next: NextFun
     const selectedModel =
       model && (FREE_MODELS as readonly string[]).includes(model) ? model : DEFAULT_FREE_MODEL;
 
-    (req.session as any).credentials = {
+    req.session.credentials = {
       provider: 'groq-free',
       model: selectedModel,
     };
@@ -149,12 +153,8 @@ router.delete('/logout', (req: Request, res: Response, next: NextFunction) => {
 // GET /api/v1/auth/me — current session info (never returns keys)
 // ---------------------------------------------------------------------------
 router.get('/me', (req: Request, res: Response) => {
-  const creds = (req.session as any).credentials as
-    | { provider: string; model?: string }
-    | undefined;
-  const user = (req.session as any).user as
-    | { email: string; name: string; picture?: string }
-    | undefined;
+  const creds = req.session.credentials;
+  const user = req.session.user;
 
   if (!creds) {
     return res.json({ authenticated: false });

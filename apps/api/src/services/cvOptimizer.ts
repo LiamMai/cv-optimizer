@@ -31,7 +31,9 @@ export interface OptimizeResult {
     improvement: number;
   };
   diff: Record<string, SectionDiff>;
-  config: Required<OptimizeConfig>;
+  // Optimize jobs populate every field; modify jobs (no atsAggressiveness/
+  // humanizationLevel concept) only set maxPages/tone.
+  config: OptimizeConfig;
   // --- "Modify CV from user data" jobs only ---
   kind?: 'optimize' | 'modify';
   /** Human-readable summary of each edit the AI made. */
@@ -204,6 +206,15 @@ Return a JSON object where each key is the section name (lowercase, matching the
 Return ONLY the JSON. No markdown code fences. No commentary.`;
 }
 
+/**
+ * Assign `value` to `target[key]` for a single, matching key/value pair.
+ * A generic per-call binding (K tied to both params) sidesteps TS's known
+ * limitation with writing through a `keyof` union directly.
+ */
+function _copySection<K extends keyof CVSections>(target: CVSections, key: K, value: CVSections[K]): void {
+  target[key] = value;
+}
+
 // ---------------------------------------------------------------------------
 // Diff utility — compare original vs optimised sections
 // ---------------------------------------------------------------------------
@@ -269,8 +280,7 @@ export async function optimize(
   for (const key of Object.keys(cvSections) as Array<keyof CVSections>) {
     if (key === 'contact' || key === 'raw') continue;
     if (optimizedSections[key] === undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (optimizedSections as any)[key as string] = cvSections[key];
+      _copySection(optimizedSections, key, cvSections[key]);
     }
   }
 

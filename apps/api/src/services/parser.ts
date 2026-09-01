@@ -233,6 +233,7 @@ interface ContactInfo {
   website: string;
   links: string;
   raw: string;
+  [key: string]: string;
 }
 
 // Words that disqualify a line from being a person's name (job titles, roles, headings).
@@ -415,7 +416,7 @@ export async function extractPdfLinks(filePath: string): Promise<string[]> {
 /** Merge externally-extracted URLs (e.g. PDF annotations) into already-parsed sections. */
 export function mergeContactLinks(sections: CVSections, urls: string[]): void {
   if (!urls.length) return;
-  _mergeLinks(sections.contact as unknown as ContactInfo, urls);
+  _mergeLinks(sections.contact as ContactInfo, urls);
 }
 
 export interface LinkAnchor {
@@ -522,7 +523,7 @@ export function extractSections(text: string): CVSections {
   };
 
   const lines = text.split(/\r?\n/);
-  sections.contact = _extractContact(lines) as unknown as Record<string, string>;
+  sections.contact = _extractContact(lines);
 
   let currentSection: string | null = null;
   let seenKnown = false; // have we passed the contact header into a real section yet?

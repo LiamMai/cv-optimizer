@@ -1,5 +1,5 @@
 # Render Blueprint — deploy the Express API (Docker) on the free tier.
-# DB lives on Neon (free serverless Postgres); set DATABASE_URL below.
+# DB lives on Neon (free serverless Postgres); set API_DATABASE_URL below.
 # Docs: https://render.com/docs/blueprint-spec
 #
 # Free web services spin down after ~15 min idle → first request cold-starts (~30s).
@@ -14,23 +14,33 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      # Backend vars are API_-prefixed (shared convention with apps/web's
+      # NEXT_PUBLIC_ vars — see repo root .env.example). PORT/NODE_ENV stay
+      # unprefixed: Render injects PORT itself and expects that exact name.
       # --- secrets: set in the Render dashboard (sync:false = not stored in repo) ---
-      - key: DATABASE_URL        # Neon pooled connection string (?sslmode=require)
+      - key: API_DATABASE_URL    # Neon pooled connection string (?sslmode=require)
         sync: false
-      - key: GROQ_API_KEY        # powers the keyless "Free AI" (groq-free) mode
+      - key: API_GROQ_API_KEY    # powers the keyless "Free AI" (groq-free) mode
         sync: false
-      - key: FRONTEND_URL        # web app origin, e.g. https://your-app.vercel.app
+      - key: API_FRONTEND_URL    # web app origin, e.g. https://your-app.vercel.app
         sync: false
-      - key: CORS_ORIGIN         # usually same as FRONTEND_URL
+      - key: API_CORS_ORIGIN     # usually same as API_FRONTEND_URL
         sync: false
       # AES-256-GCM key for session-scoped BYO API keys (encryption.ts) — MUST be
       # exactly 64 hex chars. Generate with: openssl rand -hex 32. Not generateValue
       # (Render's random value isn't valid hex → "Invalid key length" on /auth/api-key).
-      - key: ENCRYPTION_KEY
+      - key: API_ENCRYPTION_KEY
         sync: false
       # --- arbitrary random strings, generated once by Render ---
-      - key: SESSION_SECRET
+      - key: API_SESSION_SECRET
         generateValue: true
-      - key: JWT_SECRET
+      - key: API_JWT_SECRET
         generateValue: true
+      # --- optional: only needed for "Sign in with Google" in production ---
+      - key: API_GOOGLE_CLIENT_ID
+        sync: false
+      - key: API_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: API_GOOGLE_REDIRECT_URI  # https://<this-service>.onrender.com/api/v1/auth/google/callback
+        sync: false
       # NODE_ENV is baked into the image; PORT is injected by Render automatically.

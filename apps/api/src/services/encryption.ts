@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY || '', 'hex');
+const KEY = Buffer.from(process.env.API_ENCRYPTION_KEY || '', 'hex');
 
 export function encrypt(plaintext: string): string {
   const iv = crypto.randomBytes(12);

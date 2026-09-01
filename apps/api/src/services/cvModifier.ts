@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: Required<ModifyConfig> = {
 };
 
 // Section keys we let the AI rewrite (everything in CVSections except contact/raw).
-const EDITABLE_KEYS: Array<keyof CVSections> = [
+const EDITABLE_KEYS: Array<Exclude<keyof CVSections, 'contact' | 'raw'>> = [
   'summary',
   'experience',
   'education',
@@ -286,18 +286,18 @@ export async function modify(
   // removal that emptied it); an ABSENT key leaves the original untouched.
   const modifiedSections: CVSections = { ...cvSections };
   for (const key of EDITABLE_KEYS) {
-    if (key in parsed && typeof parsed[key] === 'string') {
-      (modifiedSections as unknown as Record<string, unknown>)[key as string] = parsed[key];
+    const value = parsed[key];
+    if (key in parsed && typeof value === 'string') {
+      modifiedSections[key] = value;
     }
   }
 
   // Enforce reverse-chronological ordering deterministically (LLMs are
   // unreliable at this). No-ops if the dates can't be parsed confidently.
-  for (const key of ['experience', 'projects'] as Array<keyof CVSections>) {
+  for (const key of ['experience', 'projects'] as const) {
     const v = modifiedSections[key];
     if (typeof v === 'string' && v.trim()) {
-      (modifiedSections as unknown as Record<string, unknown>)[key as string] =
-        _reorderEntriesByTimeline(_stripEmptyLabelLines(v));
+      modifiedSections[key] = _reorderEntriesByTimeline(_stripEmptyLabelLines(v));
     }
   }
 
@@ -311,7 +311,7 @@ export async function modify(
     originalSections: cvSections,
     optimizedSections: modifiedSections,
     diff,
-    config: { maxPages: mergedConfig.maxPages, tone: mergedConfig.tone } as unknown as OptimizeResult['config'],
+    config: { maxPages: mergedConfig.maxPages, tone: mergedConfig.tone },
     kind: 'modify',
     changes,
     removed,

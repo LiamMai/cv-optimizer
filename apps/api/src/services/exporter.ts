@@ -8,7 +8,13 @@
  * DOCX: uses the `docx` npm package to build a proper Word document.
  */
 
+/// <reference lib="dom" />
+// DOM lib is scoped to this file only (not the project tsconfig) — needed to type the
+// `document`/`Element` globals referenced inside puppeteer's page.evaluate() callbacks
+// below, which execute in the browser, not in this Node process.
+
 import { CVSections } from '../routes/cv';
+import type { Page } from 'puppeteer';
 
 export interface ExportResult {
   buffer: Buffer;
@@ -103,8 +109,7 @@ const PDF_SECTIONS: Array<{ title: string; key: keyof CVSections; bullets: boole
 ];
 
 /** Draw a section heading with an underline rule, then its content. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function _renderPdfSection(doc: any, title: string, content: string | undefined, asBullets: boolean): void {
+function _renderPdfSection(doc: PDFKit.PDFDocument, title: string, content: string | undefined, asBullets: boolean): void {
   if (!content || !String(content).trim()) return;
 
   doc.moveDown(0.7);
@@ -144,8 +149,8 @@ function _renderPdfSection(doc: any, title: string, content: string | undefined,
  * Fallback PDF renderer using pdfkit (pure JS) — used when headless Chromium is unavailable.
  */
 async function _exportWithPdfkit(sections: CVSections, meta: { name?: string } = {}): Promise<ExportResult> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-  const PDFDocument = require('pdfkit') as any;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const PDFDocument = require('pdfkit') as new (options: PDFKit.PDFDocumentOptions) => PDFKit.PDFDocument;
   const contact = (sections.contact || {}) as ContactInfo;
 
   const doc = new PDFDocument({
@@ -429,17 +434,12 @@ const BASE_PT = 11; // must match `html { font-size }` in the template
  * next page, exactly like the print engine — so no-break blocks that leave gaps are counted.
  * Returns the bottom Y of the last block (gaps included).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function _measureBottom(page: any): Promise<number> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function _measureBottom(page: Page): Promise<number> {
   const atoms: Array<{ top: number; height: number; atomic: boolean }> = await page.evaluate(() => {
-    const doc = (globalThis as any).document;
     // Atomic = must not split: page header, section headings, and entry header lines.
     // Everything else — bullets, list items, the summary paragraph — splits at
     // text-line boundaries (orphans/widows 2) so pages fill completely.
-    const els = Array.from(
-      doc.querySelectorAll('header, h2, p.summary, .entry, li')
-    ) as any[];
+    const els = Array.from(document.querySelectorAll('header, h2, p.summary, .entry, li'));
     return els.map((el) => {
       const r = el.getBoundingClientRect();
       return { top: r.top, height: r.height, atomic: el.matches('header, h2, .entry') };
@@ -464,14 +464,13 @@ async function _measureBottom(page: any): Promise<number> {
   return maxBottom;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function _fitToPages(page: any): Promise<void> {
+async function _fitToPages(page: Page): Promise<void> {
   const MIN = 0.85; // never shrink below this — keeps text readable
   const MAX = 1.22; // never grow past this — keeps text from looking oversized
   let scale = 1;
   for (let i = 0; i < 6; i++) {
     await page.evaluate(
-      (pt: number) => ((globalThis as any).document.documentElement.style.fontSize = pt + 'pt'),
+      (pt: number) => (document.documentElement.style.fontSize = pt + 'pt'),
       BASE_PT * scale
     );
     const bottom = await _measureBottom(page);
@@ -498,13 +497,13 @@ async function _fitToPages(page: any): Promise<void> {
 
 /** Render HTML to a PDF buffer via headless Chromium. */
 async function _renderHtmlToPdf(html: string): Promise<Buffer> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-  const puppeteer = require('puppeteer') as any;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const puppeteer = require('puppeteer') as typeof import('puppeteer');
   const browser = await puppeteer.launch({
     headless: true,
-    // Use the system Chromium in containers (PUPPETEER_EXECUTABLE_PATH); falls back to
+    // Use the system Chromium in containers (API_PUPPETEER_EXECUTABLE_PATH); falls back to
     // puppeteer's bundled download locally where the env var isn't set.
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    executablePath: process.env.API_PUPPETEER_EXECUTABLE_PATH || undefined,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   try {
@@ -513,10 +512,14 @@ async function _renderHtmlToPdf(html: string): Promise<Buffer> {
     // how page.pdf() will actually paginate (otherwise text wraps differently).
     await page.emulateMediaType('print');
     await page.setViewport({ width: PAGE_CONTENT_W_PX, height: Math.round(PAGE_CONTENT_PX), deviceScaleFactor: 1 });
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    // puppeteer's types disallow 'networkidle0' here (only for goto()/waitForNavigation()),
+    // but it's still accepted at runtime and is what actually waits for the Google Fonts
+    // <link> stylesheet (see CLAUDE.md: silent Helvetica fallback if it doesn't load) to
+    // finish before we measure/paginate.
+    await page.setContent(html, { waitUntil: 'networkidle0' } as unknown as Parameters<Page['setContent']>[1]);
     // Ensure the Inter webfont has been applied before measuring — a late font swap
     // changes line wraps and would invalidate the pagination measurement.
-    await page.evaluate(() => (globalThis as any).document.fonts.ready).catch(() => {});
+    await page.evaluate(() => document.fonts.ready).catch(() => {});
     await _fitToPages(page);
     const pdf = await page.pdf({
       format: 'A4',
@@ -562,16 +565,15 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     BorderStyle,
     UnderlineType,
     Packer,
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-  } = require('docx') as any;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  } = require('docx') as typeof import('docx');
 
   const contact = (sections.contact || {}) as ContactInfo;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function nameBlock(): any[] {
+  function nameBlock(): InstanceType<typeof Paragraph>[] {
     const name = contact.name || '';
     if (!name) return [];
-    const blocks: any[] = [
+    const blocks: InstanceType<typeof Paragraph>[] = [
       new Paragraph({
         alignment: AlignmentType.CENTER,
         children: [new TextRun({ text: name, bold: true, size: 50, font: 'Inter' })],
@@ -590,9 +592,8 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     return blocks;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function contactBlock(): any[] {
-    const blocks: any[] = [];
+  function contactBlock(): InstanceType<typeof Paragraph>[] {
+    const blocks: InstanceType<typeof Paragraph>[] = [];
     const parts = [contact.email, contact.phone, contact.location]
       .filter(Boolean)
       .join('   |   ');
@@ -609,7 +610,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     // Clickable links row
     const links = LINK_FIELDS.filter((f) => contact[f.key]);
     if (links.length) {
-      const children: any[] = [];
+      const children: Array<InstanceType<typeof TextRun> | InstanceType<typeof ExternalHyperlink>> = [];
       links.forEach((f, i) => {
         if (i > 0) children.push(new TextRun({ text: '   |   ', size: 18, color: '555555', font: 'Inter' }));
         children.push(
@@ -632,8 +633,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     return blocks;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function sectionHeading(title: string): any {
+  function sectionHeading(title: string): InstanceType<typeof Paragraph> {
     return new Paragraph({
       heading: HeadingLevel.HEADING_2,
       children: [
@@ -646,16 +646,18 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
         }),
       ],
       border: {
-        bottom: { color: '000000', space: 1, value: BorderStyle.SINGLE, size: 6 },
+        bottom: { color: '000000', space: 1, style: BorderStyle.SINGLE, size: 6 },
       },
       spacing: { before: 200, after: 80 },
     });
   }
 
   // Split text into Word runs, turning markdown links / bare URLs into clickable hyperlinks.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function inlineRuns(text: string, opts: { bold?: boolean }): any[] {
-    const runs: any[] = [];
+  function inlineRuns(
+    text: string,
+    opts: { bold?: boolean }
+  ): Array<InstanceType<typeof TextRun> | InstanceType<typeof ExternalHyperlink>> {
+    const runs: Array<InstanceType<typeof TextRun> | InstanceType<typeof ExternalHyperlink>> = [];
     let last = 0;
     let m: RegExpExecArray | null;
     INLINE_LINK.lastIndex = 0;
@@ -680,8 +682,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
     return runs.length ? runs : [new TextRun({ text, size: 22, bold: opts.bold, font: 'Inter' })];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function textToParagraphs(text: string | undefined): any[] {
+  function textToParagraphs(text: string | undefined): InstanceType<typeof Paragraph>[] {
     if (!text) return [];
     return _coalesceLines(text)
       .map((line) => {
@@ -696,8 +697,7 @@ export async function exportToDOCX(sections: CVSections): Promise<ExportResult> 
       });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function renderSection(title: string, content: string | undefined): any[] {
+  function renderSection(title: string, content: string | undefined): InstanceType<typeof Paragraph>[] {
     if (!content || !String(content).trim()) return [];
     return [sectionHeading(title), ...textToParagraphs(content)];
   }

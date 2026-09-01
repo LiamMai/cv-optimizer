@@ -63,7 +63,7 @@ router.post('/analyze', requireAuth, (req: Request, res: Response, next: NextFun
       }
 
       // Analyse with AI (pass session credentials)
-      const sessionSnapshot = { credentials: (req.session as any).credentials };
+      const sessionSnapshot = { credentials: req.session.credentials };
       let analysis: JDAnalysisResult;
       try {
         analysis = await analyzeJD(jdText, sessionSnapshot);
@@ -106,7 +106,7 @@ router.post('/analyze/text', requireAuth, express.json(), async (req: Request, r
 
     const { text } = parsed.data;
 
-    const sessionSnapshot = { credentials: (req.session as any).credentials };
+    const sessionSnapshot = { credentials: req.session.credentials };
     let analysis: JDAnalysisResult;
     try {
       analysis = await analyzeJD(text, sessionSnapshot);

@@ -5,9 +5,9 @@ const SCOPES = ['openid', 'email', 'profile'];
 
 export function getOAuth2Client(): OAuth2Client {
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/v1/auth/google/callback'
+    process.env.API_GOOGLE_CLIENT_ID,
+    process.env.API_GOOGLE_CLIENT_SECRET,
+    process.env.API_GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/v1/auth/google/callback'
   );
 }
 

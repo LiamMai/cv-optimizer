@@ -6,6 +6,7 @@ import { jdStore, JDRecord } from './jd';
 import { optimize, OptimizeResult } from '../services/cvOptimizer';
 import { createError } from '../middleware/errorHandler';
 import { requireAuth } from '../middleware/requireAuth';
+import type { SessionCredentials } from '../services/aiProvider';
 
 const router: Router = express.Router();
 
@@ -89,7 +90,7 @@ router.post('/', requireAuth, express.json(), async (req: Request, res: Response
     jobStore.set(jobId, job);
 
     // Snapshot session credentials now — session won't be accessible in the async runner
-    const sessionSnapshot = { credentials: (req.session as any).credentials };
+    const sessionSnapshot = { credentials: req.session.credentials };
 
     // Run the optimisation asynchronously (fire-and-forget with status updates)
     _runOptimizationJob(jobId, cvRecord, jdRecord, config, sessionSnapshot).catch((err: Error) => {
@@ -163,7 +164,7 @@ async function _runOptimizationJob(
   cvRecord: CVRecord,
   jdRecord: JDRecord,
   config: Record<string, unknown>,
-  session?: { credentials?: any }
+  session?: { credentials?: SessionCredentials }
 ): Promise<void> {
   const job = jobStore.get(jobId);
   if (!job) return;

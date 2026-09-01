@@ -26,7 +26,7 @@ services:
     ports:
       - '${PORT:-3001}:3001'
     env_file:
-      - ./apps/api/.env
+      - ./.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,7 +41,7 @@ services:
     ports:
       - '${WEB_PORT:-3000}:3000'
     env_file:
-      - ./apps/web/.env
+      - ./.env
     depends_on:
       - api
 

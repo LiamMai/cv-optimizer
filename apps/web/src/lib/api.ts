@@ -59,6 +59,53 @@ export async function startModification(
   return response.data;
 }
 
+// Raw shape of GET /optimize/:jobId, before this module remaps it to
+// OptimizationJob (jobId -> id, running -> processing, sections object -> array, ...).
+interface RawAtsScore {
+  score?: number;
+  matchPercent?: number;
+  coveredKeywords?: string[];
+  missingKeywords?: string[];
+  weakSections?: string[];
+  suggestions?: string[];
+  breakdown?: { keywordScore: number; skillScore: number; sectionScore: number } | null;
+}
+
+// Job config is round-tripped from the server but never read back by this app
+// (the store's own `config` field drives new job submissions) — always fill
+// it with this fixed default rather than trust-casting an unvalidated blob.
+const DEFAULT_JOB_CONFIG: OptimizationConfig = {
+  maxPages: 2,
+  tone: 'professional',
+  atsAggressiveness: 'medium',
+  humanizationLevel: 'medium',
+};
+
+interface RawSections extends Record<string, unknown> {
+  contact?: Record<string, string>;
+}
+
+interface RawOptimizeJobResponse {
+  id?: string;
+  jobId?: string;
+  cvId?: string;
+  jdId?: string;
+  config?: Record<string, unknown>;
+  status?: 'pending' | 'running' | 'completed' | 'failed';
+  error?: string;
+  result?: {
+    atsScore?: RawAtsScore & { optimized?: RawAtsScore };
+    originalSections?: RawSections;
+    optimizedSections?: RawSections;
+    diff?: Record<string, { changed: boolean }>;
+    kind?: 'optimize' | 'modify';
+    changes?: string[];
+    removed?: string[];
+    needsMoreInfo?: { section: string; question: string }[];
+    userData?: string;
+  };
+}
+
 function _sectionsObjToArray(obj: Record<string, unknown> | null | undefined): import('./types').CVSection[] {
   if (!obj || typeof obj !== 'object') return [];
   const IGNORE = new Set(['contact', 'raw']);
@@ -72,7 +119,7 @@ function _sectionsObjToArray(obj: Record<string, unknown> | null | undefined): i
 }
 
 export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
-  const response = await api.get<any>(`/optimize/${jobId}`);
+  const response = await api.get<RawOptimizeJobResponse>(`/optimize/${jobId}`);
   const data = response.data;
 
   // API returns `jobId` not `id`, and `running` not `processing`
@@ -80,14 +127,14 @@ export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
     id: data.id ?? data.jobId ?? jobId,
     cvId: data.cvId ?? '',
     jdId: data.jdId ?? '',
-    config: data.config ?? {},
-    status: data.status === 'running' ? 'processing' : data.status,
+    config: DEFAULT_JOB_CONFIG,
+    status: data.status === 'running' ? 'processing' : (data.status ?? 'pending'),
     error: data.error ?? undefined,
   };
 
   if (data.result) {
     const rawAts = data.result.atsScore;
-    const ats = rawAts?.optimized ?? rawAts ?? {};
+    const ats: RawAtsScore = rawAts?.optimized ?? rawAts ?? {};
 
     const originalSections = _sectionsObjToArray(data.result.originalSections);
     const optimizedSections = _sectionsObjToArray(data.result.optimizedSections);
@@ -103,9 +150,7 @@ export async function pollJobStatus(jobId: string): Promise<OptimizationJob> {
         accepted: false,
       }));
 
-    const contact =
-      (data.result.optimizedSections?.contact as Record<string, string> | undefined) ??
-      (data.result.originalSections?.contact as Record<string, string> | undefined);
+    const contact = data.result.optimizedSections?.contact ?? data.result.originalSections?.contact;
 
     job.result = {
       originalSections,

@@ -56,7 +56,7 @@ export function errorHandler(err: Error, req: Request, res: Response, next: Next
 
   // Zod validation errors
   if (err.name === 'ZodError') {
-    const zodErr = err as unknown as ZodError;
+    const zodErr = err as ZodError;
     res.status(400).json({
       error: 'Validation error',
       issues: zodErr.errors.map((e) => ({

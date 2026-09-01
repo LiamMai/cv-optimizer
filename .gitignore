@@ -2,7 +2,9 @@ node_modules/
 .next/
 dist/
 .env
+.env.prod
 *.env.local
+*.env.prod.local
 uploads/
 *.log
 .DS_Store

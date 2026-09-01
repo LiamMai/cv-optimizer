@@ -27,6 +27,17 @@ interface ResolvedSections {
   fileName: string;
 }
 
+// Keys a client may override via `sections` in the export request body —
+// everything editable in CVSections except contact/raw.
+type EditableSectionKey = Exclude<keyof CVSections, 'contact' | 'raw'>;
+const EDITABLE_SECTION_KEYS: readonly string[] = [
+  'summary', 'experience', 'education', 'skills', 'certifications',
+  'projects', 'languages', 'awards', 'publications', 'volunteer', 'other',
+];
+function isEditableSectionKey(key: string): key is EditableSectionKey {
+  return EDITABLE_SECTION_KEYS.includes(key);
+}
+
 /**
  * Resolve the CV sections from either a cvId or jobId.
  */
@@ -41,10 +52,12 @@ function _resolveSections(body: { cvId?: string; jobId?: string; sections?: Reco
     const baseName = cvRecord ? cvRecord.fileName.replace(/\.[^.]+$/, '') : 'cv';
     // Start from the optimized sections, then apply any per-section overrides
     // the client sent (sections where the user rejected one or more changes).
-    const sections = { ...(job.result!.optimizedSections as unknown as CVSections) };
+    const sections = { ...job.result!.optimizedSections };
     if (body.sections) {
       for (const [key, value] of Object.entries(body.sections)) {
-        (sections as Record<string, unknown>)[key] = value;
+        if (isEditableSectionKey(key)) {
+          sections[key] = value;
+        }
       }
     }
     return { sections, fileName: `${baseName}_optimized` };

@@ -35,11 +35,11 @@ No test suite. Verify changes with `type-check` / `tsc --noEmit` and by running 
 
 `apps/api/src/services/aiProvider.ts` is the single dispatch point. Providers:
 
-- **BYO key** — `claude`, `openai`, `gemini`, `groq`. Key submitted via `POST /auth/api-key`, AES-encrypted (`encryption.ts`, `ENCRYPTION_KEY`), held only in the session. Never logged, never persisted to DB.
-- **`groq-free`** — keyless "Free AI". Runs on the server's shared `GROQ_API_KEY`. User picks a model from `FREE_MODELS` (default `openai/gpt-oss-120b`; llama-3.3-70b was dropped when Groq deprecated it). This is the default mode. Pollinations/anonymous endpoints were tried and dropped (rate-limited, truncated JSON).
+- **BYO key** — `claude`, `openai`, `gemini`, `groq`. Key submitted via `POST /auth/api-key`, AES-encrypted (`encryption.ts`, `API_ENCRYPTION_KEY`), held only in the session. Never logged, never persisted to DB.
+- **`groq-free`** — keyless "Free AI". Runs on the server's shared `API_GROQ_API_KEY`. User picks a model from `FREE_MODELS` (default `openai/gpt-oss-120b`; llama-3.3-70b was dropped when Groq deprecated it). This is the default mode. Pollinations/anonymous endpoints were tried and dropped (rate-limited, truncated JSON).
 - **`gemini-oauth`** — Google sign-in. Legacy; currently routed through the server Groq key like `groq-free`.
 
-Entry point is `createCompletionFromSession(session, messages, options)`. `createCompletion(...)` is the **deprecated** env-key fallback (`AI_PROVIDER` + `*_API_KEY`) — don't build new features on it.
+Entry point is `createCompletionFromSession(session, messages, options)`. `createCompletion(...)` is the **deprecated** env-key fallback (`API_AI_PROVIDER` + `API_*_API_KEY`) — don't build new features on it.
 
 When adding a free model: update `FREE_MODELS` in `aiProvider.ts` AND `PROVIDERS` in `apps/web/src/lib/providers.ts` (they must agree; the server validates the picked model against `FREE_MODELS`).
 
@@ -68,6 +68,7 @@ Typography: Inter (fetched from Google Fonts inside the Chromium page — needs 
 - Cross-app types live in `packages/shared` — change there, not duplicated per app.
 - Secrets (API keys, OAuth tokens) stay encrypted + session-scoped; `/auth/me` returns `{ provider, model? }` only, never keys/tokens.
 - Rate limits: 100 req/15min global; 10 req/min on `/jd` + `/optimize` + `/modify` (POST only — the `GET /optimize/:jobId` status poll is exempt, else the client poller 429s its own running job).
+- Env vars live in **one root-level file** (`.env.example` / `.env.prod.example`), not per-app: backend vars are `API_`-prefixed (read via `apps/api/src/config/index.ts` and a handful of files that read `process.env` directly — `sessionConfig.ts`, `encryption.ts`, `googleOAuth.ts`, `exporter.ts`, `routes/auth.ts`), frontend vars are `NEXT_PUBLIC_`-prefixed (Next.js's own convention for browser-exposed vars). `PORT`/`NODE_ENV` stay unprefixed — Render injects `PORT` directly and expects that exact name. `pnpm dev` reads root `.env.local`; `pnpm start` reads root `.env` and never touches `.env.local`. Both `apps/api/src/config/index.ts` and `apps/web/next.config.js` resolve the root path via `__dirname`, so this works regardless of cwd. Adding a new backend env var: add it with the `API_` prefix in both `.env.example` and `.env.prod.example`, and to `render.yaml`'s `envVars` if it's needed in production.
 
 ## Keep docs in sync (do this automatically)
 

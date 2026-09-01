@@ -22,8 +22,8 @@ Pick how the AI runs from the **Connect Provider** screen. Three ways:
 
 | Mode | How | Setup |
 |---|---|---|
-| **Free AI** (default) | Keyless. Runs on the server's shared Groq key — no sign-in, no API key. Choose a model in the picker. | Server needs `GROQ_API_KEY` |
-| **Google (Gemini)** | OAuth — sign in with Google, free tier (1,500 req/day). | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
+| **Free AI** (default) | Keyless. Runs on the server's shared Groq key — no sign-in, no API key. Choose a model in the picker. | Server needs `API_GROQ_API_KEY` |
+| **Google (Gemini)** | OAuth — sign in with Google, free tier (1,500 req/day). | `API_GOOGLE_CLIENT_ID` / `API_GOOGLE_CLIENT_SECRET` |
 | **Bring your own key** | Paste an API key for Anthropic Claude, OpenAI, Google Gemini, or Groq. Key is encrypted into your session, never stored. | none |
 
 **Free AI models** (`groq-free`):
@@ -124,42 +124,47 @@ pnpm install
 
 ### 2. Configure environment
 
-```bash
-# API
-cp apps/api/.env.example apps/api/.env
+One shared file at the repo root covers both apps — backend vars are
+`API_`-prefixed, frontend vars are `NEXT_PUBLIC_`-prefixed (each app reads
+only its own subset, so sharing one file is safe):
 
-# Web
-cp apps/web/.env.example apps/web/.env
+```bash
+# `pnpm dev` reads .env.local (gitignored); `pnpm start` reads .env instead
+# and ignores .env.local entirely
+cp .env.example .env.local
 ```
 
-Edit `apps/api/.env`:
+Edit `.env.local`:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/cv_optimizer"
+API_DATABASE_URL="postgresql://user:password@localhost:5432/cv_optimizer"
 
 PORT=3001
-CORS_ORIGIN="http://localhost:3000"
+API_CORS_ORIGIN="http://localhost:3000"
 
 # Free AI (keyless "Free AI" mode) — server's shared Groq key
-GROQ_API_KEY="..."
+API_GROQ_API_KEY="..."
 
 # Optional: env-default provider for the deprecated keyless createCompletion path
-AI_PROVIDER="claude"          # claude | openai
-ANTHROPIC_API_KEY="..."       # bring-your-own keys are normally sent per-session,
-OPENAI_API_KEY="..."          # not via env — these are only for the env fallback
-GEMINI_API_KEY="..."
+API_AI_PROVIDER="claude"          # claude | openai
+API_ANTHROPIC_API_KEY="..."       # bring-your-own keys are normally sent per-session,
+API_OPENAI_API_KEY="..."          # not via env — these are only for the env fallback
+API_GEMINI_API_KEY="..."
 
 # Google OAuth (only needed for the "Sign in with Google / Gemini" mode)
-GOOGLE_CLIENT_ID="..."
-GOOGLE_CLIENT_SECRET="..."
-GOOGLE_REDIRECT_URI="http://localhost:3001/api/v1/auth/google/callback"
+API_GOOGLE_CLIENT_ID="..."
+API_GOOGLE_CLIENT_SECRET="..."
+API_GOOGLE_REDIRECT_URI="http://localhost:3001/api/v1/auth/google/callback"
 
 # Session security
-ENCRYPTION_KEY=""   # 64 hex chars: openssl rand -hex 32
-SESSION_SECRET=""   # any long random string
+API_ENCRYPTION_KEY=""   # 64 hex chars: openssl rand -hex 32
+API_SESSION_SECRET=""   # any long random string
+
+# Frontend
+NEXT_PUBLIC_API_URL="http://localhost:3001"
 ```
 
-> Bring-your-own API keys are submitted at runtime via `POST /auth/api-key`, encrypted with `ENCRYPTION_KEY`, and held only in the session. The `*_API_KEY` env vars above feed only the legacy env-based fallback.
+> Bring-your-own API keys are submitted at runtime via `POST /auth/api-key`, encrypted with `API_ENCRYPTION_KEY`, and held only in the session. The `API_*_API_KEY` env vars above feed only the legacy env-based fallback.
 
 ### 3. Set up database
 
@@ -330,7 +335,7 @@ Returns: `coveredKeywords`, `missingKeywords`, `weakSections`, `suggestions`.
 | `.docx` | `mammoth` |
 | `.txt` | `fs.readFile` |
 
-Max upload size: **10 MB** (configurable via `MAX_FILE_SIZE_MB`).
+Max upload size: **10 MB** (configurable via `API_MAX_FILE_SIZE_MB`).
 
 **Image-only / scanned PDFs:** when text extraction yields fewer than 50 chars (no text layer — scanned pages or text exported as vector outlines), the parser renders each page to a PNG via `pdf-to-img` and OCRs it with `tesseract.js` (English). OCR is slow (~1s/page) and runs only as a fallback. First run downloads the tesseract language data from a CDN, so the API host must allow outbound network (or the data must be pre-cached).
 
@@ -367,29 +372,45 @@ cd apps/api && npx prisma generate
 
 ## Environment Variables
 
-### API (`apps/api/.env`)
+One shared file at the repo root (`.env.local` for `pnpm dev`, `.env` for
+`pnpm start`) — see [Configure environment](#2-configure-environment).
+Backend vars are `API_`-prefixed, frontend vars are `NEXT_PUBLIC_`-prefixed;
+`PORT`/`NODE_ENV` stay unprefixed since hosting platforms (e.g. Render)
+inject/expect those exact names. Postgres vars are read by docker-compose only.
+
+### Backend (apps/api)
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `API_DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `PORT` | No | `3001` | API server port |
-| `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origin |
-| `GROQ_API_KEY` | For Free AI | — | Server's shared Groq key powering keyless `groq-free` mode |
-| `AI_PROVIDER` | No | `claude` | Env-fallback provider (`claude`/`openai`) for legacy `createCompletion` |
-| `ANTHROPIC_API_KEY` | No | — | Env fallback only — BYO keys are sent per-session |
-| `OPENAI_API_KEY` | No | — | Env fallback only |
-| `GEMINI_API_KEY` | No | — | Env fallback only |
-| `GOOGLE_CLIENT_ID` | For Google sign-in | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | For Google sign-in | — | Google OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | No | `http://localhost:3001/api/v1/auth/google/callback` | OAuth callback URL |
-| `ENCRYPTION_KEY` | Yes | — | 64 hex chars — encrypt session tokens |
-| `SESSION_SECRET` | Yes | — | Express session signing secret |
-| `SESSION_TTL_HOURS` | No | `2` | Session lifetime in hours |
-| `UPLOAD_DIR` | No | `uploads` | Directory for temp file storage |
-| `MAX_FILE_SIZE_MB` | No | `10` | Max upload size |
+| `API_CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origin |
+| `API_GROQ_API_KEY` | For Free AI | — | Server's shared Groq key powering keyless `groq-free` mode |
+| `API_AI_PROVIDER` | No | `claude` | Env-fallback provider (`claude`/`openai`) for legacy `createCompletion` |
+| `API_ANTHROPIC_API_KEY` | No | — | Env fallback only — BYO keys are sent per-session |
+| `API_OPENAI_API_KEY` | No | — | Env fallback only |
+| `API_GEMINI_API_KEY` | No | — | Env fallback only |
+| `API_GOOGLE_CLIENT_ID` | For Google sign-in | — | Google OAuth client ID |
+| `API_GOOGLE_CLIENT_SECRET` | For Google sign-in | — | Google OAuth client secret |
+| `API_GOOGLE_REDIRECT_URI` | No | `http://localhost:3001/api/v1/auth/google/callback` | OAuth callback URL |
+| `API_ENCRYPTION_KEY` | Yes | — | 64 hex chars — encrypt session tokens |
+| `API_SESSION_SECRET` | Yes | — | Express session signing secret |
+| `API_SESSION_TTL_HOURS` | No | `2` | Session lifetime in hours |
+| `API_UPLOAD_DIR` | No | `uploads` | Directory for temp file storage |
+| `API_MAX_FILE_SIZE_MB` | No | `10` | Max upload size |
+| `API_PUPPETEER_EXECUTABLE_PATH` | No | — | System Chromium path in containers |
 
-### Web (`apps/web/.env`)
+### Frontend (apps/web)
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `NEXT_PUBLIC_API_URL` | No | `http://localhost:3001` | API base URL |
+
+### Database (docker-compose)
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `POSTGRES_USER` | No | `cvo` | Dev postgres container user |
+| `POSTGRES_PASSWORD` | No | `cvo_secret` | Dev postgres container password |
+| `POSTGRES_DB` | No | `cv_optimizer` | Dev postgres container database name |
+| `POSTGRES_PORT` | No | `5433` | Host port mapped to the postgres container |

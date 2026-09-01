@@ -1,7 +1,7 @@
 import config from '../config';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerateContentRequest } from '@google/generative-ai';
 import { decrypt } from './encryption';
 
 // ---------------------------------------------------------------------------
@@ -224,14 +224,11 @@ async function callGeminiApiKey(
     temperature,
   };
 
-  const requestConfig: Parameters<typeof model.generateContent>[0] = {
+  const requestConfig: GenerateContentRequest = {
     contents,
     generationConfig,
+    ...(systemInstruction ? { systemInstruction } : {}),
   };
-
-  if (systemInstruction) {
-    (requestConfig as any).systemInstruction = systemInstruction;
-  }
 
   const result = await _withRetry('gemini', () => model.generateContent(requestConfig));
   const response = result.response;
@@ -422,7 +419,7 @@ export async function createCompletionFromSession(
     case 'groq':
       return callGroq(apiKey, messages, options);
     default:
-      throw new Error(`Unknown provider: ${(creds as any).provider}`);
+      throw new Error(`Unknown provider: ${String(creds)}`);
   }
 }
 
@@ -447,7 +444,7 @@ export async function createCompletion(
   } else if (provider === 'openai') {
     return _callOpenAI(messages, { maxTokens, temperature });
   } else {
-    throw new Error(`Unknown AI provider: "${provider}". Set AI_PROVIDER to "claude" or "openai".`);
+    throw new Error(`Unknown AI provider: "${provider}". Set API_AI_PROVIDER to "claude" or "openai".`);
   }
 }
 
