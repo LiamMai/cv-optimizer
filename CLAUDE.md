@@ -23,10 +23,13 @@ pnpm db:up        # docker postgres (docker-compose.dev.yml)
 pnpm --filter @cv-optimizer/web type-check
 cd apps/api && npx tsc --noEmit
 
-# prisma (from apps/api)
-npx prisma migrate dev --name <x>
-npx prisma generate
-npx prisma studio
+# prisma (from apps/api) — db:push/migrate/studio are wrapped with dotenv-cli
+# to load the root .env.local/.env (Prisma's own env("API_DATABASE_URL") in
+# schema.prisma has no knowledge of config/index.ts's dotenv loading, so a
+# bare `npx prisma ...` fails with "Environment variable not found")
+pnpm db:migrate --name <x>
+pnpm db:generate
+pnpm db:studio
 ```
 
 No test suite. Verify changes with `type-check` / `tsc --noEmit` and by running the app.

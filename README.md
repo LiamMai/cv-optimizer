@@ -170,8 +170,8 @@ NEXT_PUBLIC_API_URL="http://localhost:3001"
 
 ```bash
 cd apps/api
-npx prisma migrate dev --name init
-npx prisma generate
+pnpm db:migrate --name init
+pnpm db:generate
 ```
 
 ### 4. Run
@@ -362,10 +362,10 @@ pnpm --filter @cv-optimizer/web type-check
 cd apps/api && npx tsc --noEmit
 
 # Prisma Studio (DB browser)
-cd apps/api && npx prisma studio
+cd apps/api && pnpm db:studio
 
 # Generate Prisma client after schema changes
-cd apps/api && npx prisma generate
+cd apps/api && pnpm db:generate
 ```
 
 ---
