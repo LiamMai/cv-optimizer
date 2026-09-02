@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ParsedCV, JDAnalysis, OptimizationJob, OptimizationConfig } from '@/lib/types';
+import type { ParsedCV, JDAnalysis, OptimizationJob, OptimizationConfig, ATSScore, CVSection } from '@/lib/types';
 import type { DiffDecision } from '@/lib/diff';
 
 interface JDState {
@@ -27,6 +27,8 @@ interface CVStore {
   config: OptimizationConfig;
   /** Per-hunk decisions keyed by diff hunk id (`${sectionType}#${index}`). */
   diffDecisions: Record<string, DiffDecision>;
+  /** Client-only, preview-only section display order for the block editor; null = default (PDF_SECTION_ORDER). */
+  sectionOrder: string[] | null;
 
   // Actions
   setCv: (cv: ParsedCV) => void;
@@ -38,6 +40,12 @@ interface CVStore {
   setManyDecisions: (decisions: Record<string, DiffDecision>) => void;
   clearDecisions: () => void;
   setConfig: (config: Partial<OptimizationConfig>) => void;
+  /** Replace one section's content in optimizationJob.result.optimizedSections; upserts if the
+   *  section type isn't present yet (empty sections are dropped when the job result is built). */
+  updateSectionContent: (sectionType: string, content: string) => void;
+  setSectionOrder: (order: string[]) => void;
+  /** Deep-merges into optimizationJob.result.atsScore after a block edit re-scores the CV. */
+  setAtsScore: (score: ATSScore) => void;
   reset: () => void;
 }
 
@@ -49,12 +57,13 @@ export const useCVStore = create<CVStore>()(
       optimizationJob: null,
       config: defaultConfig,
       diffDecisions: {},
+      sectionOrder: null,
 
       setCv: (cv) => set({ cv }),
 
       setJd: (jd) => set({ jd }),
 
-      setOptimizationJob: (job) => set({ optimizationJob: job, diffDecisions: {} }),
+      setOptimizationJob: (job) => set({ optimizationJob: job, diffDecisions: {}, sectionOrder: null }),
 
       updateOptimizationJob: (updates) =>
         set((state) => ({
@@ -82,6 +91,36 @@ export const useCVStore = create<CVStore>()(
       setConfig: (config) =>
         set((state) => ({ config: { ...state.config, ...config } })),
 
+      updateSectionContent: (sectionType, content) =>
+        set((state) => {
+          if (!state.optimizationJob?.result) return state;
+          const sections = state.optimizationJob.result.optimizedSections;
+          const idx = sections.findIndex((s) => s.type === sectionType);
+          const nextSections: CVSection[] =
+            idx === -1
+              ? [...sections, { type: sectionType, title: sectionType, content }]
+              : sections.map((s, i) => (i === idx ? { ...s, content } : s));
+          return {
+            optimizationJob: {
+              ...state.optimizationJob,
+              result: { ...state.optimizationJob.result, optimizedSections: nextSections },
+            },
+          };
+        }),
+
+      setSectionOrder: (order) => set({ sectionOrder: order }),
+
+      setAtsScore: (score) =>
+        set((state) => {
+          if (!state.optimizationJob?.result) return state;
+          return {
+            optimizationJob: {
+              ...state.optimizationJob,
+              result: { ...state.optimizationJob.result, atsScore: score },
+            },
+          };
+        }),
+
       reset: () =>
         set({
           cv: null,
@@ -89,6 +128,7 @@ export const useCVStore = create<CVStore>()(
           optimizationJob: null,
           config: defaultConfig,
           diffDecisions: {},
+          sectionOrder: null,
         }),
     }),
     {
@@ -99,6 +139,7 @@ export const useCVStore = create<CVStore>()(
         optimizationJob: state.optimizationJob,
         config: state.config,
         diffDecisions: state.diffDecisions,
+        sectionOrder: state.sectionOrder,
       }),
     }
   )

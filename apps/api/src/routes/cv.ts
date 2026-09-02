@@ -47,6 +47,17 @@ export interface StyleHints {
   accentColor?: string;
 }
 
+// Keys a client may override with edited content (e.g. export overrides, block-editor
+// rescoring) — everything editable in CVSections except contact/raw.
+export type EditableSectionKey = Exclude<keyof CVSections, 'contact' | 'raw'>;
+export const EDITABLE_SECTION_KEYS: readonly string[] = [
+  'summary', 'experience', 'education', 'skills', 'certifications',
+  'projects', 'languages', 'awards', 'publications', 'volunteer', 'other',
+];
+export function isEditableSectionKey(key: string): key is EditableSectionKey {
+  return EDITABLE_SECTION_KEYS.includes(key);
+}
+
 export interface CVRecord {
   id: string;
   fileName: string;

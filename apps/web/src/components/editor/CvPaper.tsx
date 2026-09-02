@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Check, X, RotateCcw } from 'lucide-react';
 import type { CVContact, CVSection, StyleHints } from '@/lib/types';
-import { formatSection, type CvBlock, type InlineRun } from '@/lib/cvFormat';
+import { formatSection, groupEntries, type CvBlock, type InlineRun } from '@/lib/cvFormat';
+import type { BlockOp } from '@/lib/blockDiff';
+import type { DiffDecision, WordToken } from '@/lib/diff';
 
 // Section display order + labels, matching the PDF export template.
 export const PDF_SECTION_ORDER = [
@@ -37,10 +40,14 @@ export function sectionLabel(type: string): string {
   return SECTION_LABELS[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-export function sortByPdfOrder(sections: CVSection[]): CVSection[] {
+/** Sort sections for display. `customOrder` (e.g. the block editor's user-dragged section
+ *  order) takes precedence over the default PDF_SECTION_ORDER when given. Preview-only —
+ *  export still always uses the fixed PDF_SECTION_ORDER (see CLAUDE.md). */
+export function sortByPdfOrder(sections: CVSection[], customOrder?: string[]): CVSection[] {
+  const order = customOrder ?? PDF_SECTION_ORDER;
   return [...sections].sort((a, b) => {
-    const ai = PDF_SECTION_ORDER.indexOf(a.type);
-    const bi = PDF_SECTION_ORDER.indexOf(b.type);
+    const ai = order.indexOf(a.type);
+    const bi = order.indexOf(b.type);
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
 }
@@ -158,10 +165,10 @@ export function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-const LI_CLASS =
+export const LI_CLASS =
   "relative mb-1 pl-4 text-justify text-[1em] leading-[1.45] text-slate-800 before:absolute before:left-0 before:text-slate-900 before:content-['•']";
-const PARA_CLASS = 'text-justify text-[1em] leading-[1.45] text-slate-800';
-const ENTRY_TITLE_CLASS = 'text-[1em] font-bold text-slate-900';
+export const PARA_CLASS = 'text-justify text-[1em] leading-[1.45] text-slate-800';
+export const ENTRY_TITLE_CLASS = 'text-[1em] font-bold text-slate-900';
 
 function BulletItem({ b }: { b: Extract<CvBlock, { kind: 'bullet' }> }) {
   return (
@@ -282,7 +289,7 @@ export function CvPage({
   return (
     <div
       className="mx-auto max-w-[760px] rounded-lg bg-white px-8 py-10 shadow-sm ring-1 ring-slate-200 sm:px-12"
-      style={{ fontFamily: bodyFont.stack }}
+      style={{ fontFamily: bodyFont.stack, fontSize: `${BASE_PT}pt` }}
     >
       <CvHeader contact={contact} />
       {children}
@@ -305,6 +312,149 @@ export function FormattedCv({ sections }: { sections: CVSection[] }) {
         );
       })}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Diff-aware rendering — accept/reject controls and hunk highlighting, reused by
+// the paginated view's atom builder for sections that have a pending diff. Mirrors
+// the CvBlock/InlineRuns primitives above so a diff atom renders like its plain
+// counterpart, just wrapped with change styling.
+// ---------------------------------------------------------------------------
+
+function Controls({
+  id,
+  decision,
+  onDecide,
+}: {
+  id: string;
+  decision: DiffDecision | undefined;
+  onDecide: (id: string, d: DiffDecision) => void;
+}) {
+  if (decision) {
+    return (
+      <button
+        type="button"
+        title="Undo decision"
+        onClick={() => onDecide(id, decision)}
+        className="ml-1 inline-flex h-4 w-4 translate-y-[2px] items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+      >
+        <RotateCcw size={11} />
+      </button>
+    );
+  }
+  return (
+    <span className="ml-1 inline-flex translate-y-[2px] items-center gap-0.5 align-middle">
+      <button
+        type="button"
+        title="Accept"
+        onClick={() => onDecide(id, 'accepted')}
+        className="inline-flex h-4 w-4 items-center justify-center rounded bg-green-600 text-white hover:bg-green-700"
+      >
+        <Check size={11} />
+      </button>
+      <button
+        type="button"
+        title="Reject"
+        onClick={() => onDecide(id, 'rejected')}
+        className="inline-flex h-4 w-4 items-center justify-center rounded bg-red-500 text-white hover:bg-red-600"
+      >
+        <X size={11} />
+      </button>
+    </span>
+  );
+}
+
+function Tokens({ tokens }: { tokens: WordToken[] }) {
+  return (
+    <>
+      {tokens.map((t, i) => {
+        if (t.type === 'unchanged') return <span key={i}>{t.text} </span>;
+        if (t.type === 'added') return <span key={i} className="text-green-700">{t.text} </span>;
+        return <span key={i} className="text-red-600 line-through">{t.text} </span>;
+      })}
+    </>
+  );
+}
+
+/** Inner content of a plain (non-diff) block inside a diff-aware atom — label, links, etc. */
+function DiffBlockInner({ block }: { block: CvBlock }) {
+  if (block.kind === 'paragraph') return <InlineRuns runs={block.runs} />;
+  if (block.kind === 'entry') return <InlineRuns runs={block.titleRuns} />;
+  return (
+    <>
+      {block.label && <strong>{block.label}: </strong>}
+      <InlineRuns runs={block.runs} />
+    </>
+  );
+}
+
+// Decided state → which block is shown, and whether it survives into the final CV.
+function decided(op: BlockOp, d: DiffDecision): { block: CvBlock; present: boolean } {
+  if (op.kind === 'added') return { block: op.opt!, present: d !== 'rejected' };
+  if (op.kind === 'removed') return { block: op.orig!, present: d === 'rejected' };
+  // changed
+  return { block: (d === 'rejected' ? op.orig : op.opt)!, present: true };
+}
+
+/** Whether a decided hunk's content is excluded from the final resolved CV — mirrors
+ *  `resolveBlocks` in blockDiff.ts exactly (an accepted removal, or a rejected addition).
+ *  Such atoms must not occupy pagination space, or the preview's page breaks would
+ *  drift from the exported PDF's once hunks are decided. Pending hunks are never
+ *  hidden — they still render live (via the PENDING styling below) for review. */
+function isHiddenByDecision(op: BlockOp, decisions: Record<string, DiffDecision>): boolean {
+  if (!op.id) return false;
+  const d = decisions[op.id];
+  if (!d) return false;
+  return !decided(op, d).present;
+}
+
+const PENDING = 'rounded px-0.5 ring-1 ring-amber-200 bg-amber-50/60';
+const KEPT = 'rounded px-0.5 bg-green-50 text-green-800';
+const DROPPED = 'rounded px-0.5 bg-slate-100 text-slate-400 line-through';
+
+/** Highlight span + inner content for a changed/added/removed op. */
+function HunkSpan({ op, decision }: { op: BlockOp; decision: DiffDecision | undefined }) {
+  if (!decision) {
+    // Pending — show the change itself.
+    let inner: React.ReactNode;
+    if (op.kind === 'changed') inner = <Tokens tokens={op.tokens!} />;
+    else if (op.kind === 'added') inner = <span className="text-green-700"><DiffBlockInner block={op.opt!} /></span>;
+    else inner = <span className="text-red-600 line-through"><DiffBlockInner block={op.orig!} /></span>;
+    return <span className={PENDING}>{inner}</span>;
+  }
+  const { block, present } = decided(op, decision);
+  return (
+    <span className={present ? KEPT : DROPPED}>
+      <DiffBlockInner block={block} />
+    </span>
+  );
+}
+
+/** Entry header (job/project title + date) for a diff-aware entry group. */
+function DiffEntryRow({
+  op,
+  decision,
+  onDecide,
+}: {
+  op: BlockOp;
+  decision: DiffDecision | undefined;
+  onDecide: (id: string, d: DiffDecision) => void;
+}) {
+  const rep = (op.opt ?? op.orig)!;
+  const body = op.kind === 'unchanged' ? <DiffBlockInner block={rep} /> : <HunkSpan op={op} decision={decision} />;
+  const dateBlock = op.kind === 'removed' ? op.orig : op.opt;
+  const date = dateBlock?.kind === 'entry' ? dateBlock.date : undefined;
+  return (
+    <div className="mb-0.5 mt-3 flex items-baseline justify-between gap-3">
+      <span className={ENTRY_TITLE_CLASS}>
+        {body}
+        {op.id && <Controls id={op.id} decision={decision} onDecide={onDecide} />}
+      </span>
+      {date && op.kind !== 'changed' && (
+        <span className={`whitespace-nowrap ${ENTRY_TITLE_CLASS}`}>{date}</span>
+      )}
+    </div>
   );
 }
 
@@ -341,76 +491,171 @@ interface Segment {
   clip?: { top: number; height: number };
 }
 
-function buildAtoms(contact: CVContact | undefined, sections: CVSection[]): Atom[] {
+interface DiffContext {
+  opsBySection: Record<string, BlockOp[]>;
+  decisions: Record<string, DiffDecision>;
+  onDecide: (hunkId: string, decision: DiffDecision) => void;
+}
+
+function buildAtoms(
+  contact: CVContact | undefined,
+  sections: CVSection[],
+  diff?: DiffContext,
+  sectionOrder?: string[]
+): Atom[] {
   const atoms: Atom[] = [];
   const hasHeader =
     !!contact &&
     [contact.name, contact.title, contact.location, contact.phone, contact.email, contact.portfolio, contact.linkedin, contact.github, contact.website].some(Boolean);
   if (hasHeader) atoms.push({ key: 'header', node: <CvHeader contact={contact} /> });
 
-  for (const s of sortByPdfOrder(sections)) {
-    const blocks = formatSection(s.type, s.content);
-    if (!blocks.length) continue;
+  for (const s of sortByPdfOrder(sections, sectionOrder)) {
+    const ops = diff?.opsBySection[s.type];
+
+    if (!ops) {
+      // Plain path — no diff for this section.
+      const blocks = formatSection(s.type, s.content);
+      if (!blocks.length) continue;
+      atoms.push({
+        key: `${s.type}:h`,
+        glueNext: true,
+        node: <SectionHeading>{sectionLabel(s.type)}</SectionHeading>,
+      });
+
+      // Group an entry with all of its bullets into one unbreakable atom; loose
+      // bullets (list sections) and paragraphs are individual atoms, mirroring
+      // the PDF's `li { break-inside: avoid }` / `.entry-block { break-inside: avoid }`.
+      const groups = groupEntries(blocks, (b) => b.kind);
+
+      groups.forEach((group, gi) => {
+        const key = `${s.type}:${gi}`;
+        const [head, ...rest] = group;
+        if (head.kind === 'entry') {
+          // Header + each bullet are separate atoms tied by groupId, so paginate()
+          // can keep a short entry whole but break a long one at bullet boundaries.
+          atoms.push({ key: `${key}:h`, groupId: key, node: <EntryRow b={head} /> });
+          rest.forEach((b, i) => {
+            if (b.kind !== 'bullet') return;
+            atoms.push({
+              key: `${key}:b${i}`,
+              groupId: key,
+              splittable: true,
+              node: (
+                <ul>
+                  <BulletItem b={b} />
+                </ul>
+              ),
+            });
+          });
+        } else if (head.kind === 'paragraph') {
+          atoms.push({
+            key,
+            splittable: true,
+            node: (
+              <p className={PARA_CLASS}>
+                <InlineRuns runs={head.runs} />
+              </p>
+            ),
+          });
+        } else {
+          atoms.push({
+            key,
+            splittable: true,
+            node: (
+              <ul>
+                <BulletItem b={head} />
+              </ul>
+            ),
+          });
+        }
+      });
+      continue;
+    }
+
+    // Diff-aware path — this section has pending/decided change hunks. Atoms are
+    // built from BlockOp[] instead of CvBlock[], rendering hunks via HunkSpan/Controls.
+    // Any atom belonging to a hunk (op.id set) is non-splittable: paginate() must
+    // never clip a page break through an Accept/Reject/Undo button, so the whole
+    // hunk jumps to the next page instead of being cut mid-line like unchanged text.
+    if (!ops.length) continue;
+    // Mirrors the plain path's `if (!blocks.length) continue` — a section left with
+    // nothing visible (everything decided-and-dropped) shouldn't render an empty heading.
+    if (!ops.some((op) => !isHiddenByDecision(op, diff.decisions))) continue;
     atoms.push({
       key: `${s.type}:h`,
       glueNext: true,
-      node: <SectionHeading>{sectionLabel(s.type)}</SectionHeading>,
+      node: (
+        <SectionHeading>
+          {sectionLabel(s.type)}
+          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-700">
+            edited
+          </span>
+        </SectionHeading>
+      ),
     });
 
-    // Group an entry with all of its bullets into one unbreakable atom; loose
-    // bullets (list sections) and paragraphs are individual atoms, mirroring
-    // the PDF's `li { break-inside: avoid }` / `.entry-block { break-inside: avoid }`.
-    let entry: CvBlock[] | null = null;
-    const groups: CvBlock[][] = [];
-    for (const b of blocks) {
-      if (b.kind === 'entry') {
-        entry = [b];
-        groups.push(entry);
-      } else if (entry && b.kind === 'bullet') {
-        entry.push(b);
-      } else {
-        groups.push([b]);
-        entry = null;
-      }
-    }
+    const groups = groupEntries(ops, (op) => (op.opt ?? op.orig)!.kind);
 
     groups.forEach((group, gi) => {
       const key = `${s.type}:${gi}`;
       const [head, ...rest] = group;
-      if (head.kind === 'entry') {
-        // Header + each bullet are separate atoms tied by groupId, so paginate()
-        // can keep a short entry whole but break a long one at bullet boundaries.
-        atoms.push({ key: `${key}:h`, groupId: key, node: <EntryRow b={head} /> });
+      const headRep = (head.opt ?? head.orig)!;
+      const headDecision = head.id ? diff.decisions[head.id] : undefined;
+      const headHidden = isHiddenByDecision(head, diff.decisions);
+
+      if (headRep.kind === 'entry') {
+        if (!headHidden) {
+          atoms.push({
+            key: `${key}:h`,
+            groupId: key,
+            node: <DiffEntryRow op={head} decision={headDecision} onDecide={diff.onDecide} />,
+          });
+        }
         rest.forEach((b, i) => {
-          if (b.kind !== 'bullet') return;
+          const bRep = (b.opt ?? b.orig)!;
+          if (bRep.kind !== 'bullet') return;
+          if (isHiddenByDecision(b, diff.decisions)) return;
+          const bDecision = b.id ? diff.decisions[b.id] : undefined;
+          const body = b.kind === 'unchanged' ? <DiffBlockInner block={bRep} /> : <HunkSpan op={b} decision={bDecision} />;
           atoms.push({
             key: `${key}:b${i}`,
             groupId: key,
-            splittable: true,
+            splittable: b.id == null,
             node: (
               <ul>
-                <BulletItem b={b} />
+                <li className={LI_CLASS}>
+                  {body}
+                  {b.id && <Controls id={b.id} decision={bDecision} onDecide={diff.onDecide} />}
+                </li>
               </ul>
             ),
           });
         });
-      } else if (head.kind === 'paragraph') {
+      } else if (headRep.kind === 'paragraph') {
+        if (headHidden) return;
+        const body = head.kind === 'unchanged' ? <DiffBlockInner block={headRep} /> : <HunkSpan op={head} decision={headDecision} />;
         atoms.push({
           key,
-          splittable: true,
+          splittable: head.id == null,
           node: (
             <p className={PARA_CLASS}>
-              <InlineRuns runs={head.runs} />
+              {body}
+              {head.id && <Controls id={head.id} decision={headDecision} onDecide={diff.onDecide} />}
             </p>
           ),
         });
       } else {
+        if (headHidden) return;
+        const body = head.kind === 'unchanged' ? <DiffBlockInner block={headRep} /> : <HunkSpan op={head} decision={headDecision} />;
         atoms.push({
           key,
-          splittable: true,
+          splittable: head.id == null,
           node: (
             <ul>
-              <BulletItem b={head} />
+              <li className={LI_CLASS}>
+                {body}
+                {head.id && <Controls id={head.id} decision={headDecision} onDecide={diff.onDecide} />}
+              </li>
             </ul>
           ),
         });
@@ -541,19 +786,56 @@ export function PaginatedCv({
   contact,
   sections,
   styleHints,
+  opsBySection,
+  decisions,
+  onDecide,
+  sectionOrder,
 }: {
   contact?: CVContact;
   sections: CVSection[];
   styleHints?: StyleHints;
+  opsBySection?: Record<string, BlockOp[]>;
+  decisions?: Record<string, DiffDecision>;
+  onDecide?: (hunkId: string, decision: DiffDecision) => void;
+  /** Preview-only display order (e.g. from the block editor's drag-reorder); falls back
+   *  to PDF_SECTION_ORDER when omitted. Never sent to export — see CLAUDE.md. */
+  sectionOrder?: string[];
 }) {
   const bodyFont = fontChoiceFor(styleHints?.bodyFont);
   useGoogleFont(bodyFont.googleSpec);
-  const atoms = useMemo(() => buildAtoms(contact, sections), [contact, sections]);
+  // Memoized separately from `atoms` below so an unrelated parent re-render (e.g. the
+  // notes textarea) doesn't hand buildAtoms a fresh object literal every time and force
+  // a spurious remeasure/repaginate.
+  const diffCtx = useMemo<DiffContext | undefined>(
+    () => (opsBySection && decisions && onDecide ? { opsBySection, decisions, onDecide } : undefined),
+    [opsBySection, decisions, onDecide]
+  );
+  const atoms = useMemo(
+    () => buildAtoms(contact, sections, diffCtx, sectionOrder),
+    [contact, sections, diffCtx, sectionOrder]
+  );
   const measureRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<Segment[][] | null>(null);
   const [fitPt, setFitPt] = useState(BASE_PT);
   const [scale, setScale] = useState(1);
+
+  // `pages`' Segment.i indices are only valid against the `atoms` array they were
+  // computed from. Deciding a hunk can now change atoms.length (a decided-and-dropped
+  // block no longer produces an atom — see isHiddenByDecision), so a stale `pages` from
+  // before the decision must not render against the new, shorter `atoms`. Calling
+  // setPages(null) alone isn't enough: it only schedules a future render, while this
+  // render's `pages` local is already the stale value it would render with right now —
+  // so `renderPages` shadows it for the current pass too, falling back to the same
+  // unpaginated-atoms path used before the first measurement, until the effect below
+  // recomputes real pages for the new atoms.
+  const prevAtomsRef = useRef(atoms);
+  let renderPages = pages;
+  if (prevAtomsRef.current !== atoms) {
+    prevAtomsRef.current = atoms;
+    renderPages = null;
+    if (pages !== null) setPages(null);
+  }
 
   useLayoutEffect(() => {
     let cancelled = false;
@@ -673,7 +955,7 @@ export function PaginatedCv({
       </div>
 
       <div style={{ zoom: scale }} className="flex flex-col items-center gap-6">
-        {(pages ?? [atoms.map((_, i): Segment => ({ i }))]).map((indices, pi, all) => (
+        {(renderPages ?? [atoms.map((_, i): Segment => ({ i }))]).map((indices, pi, all) => (
           <div key={pi} className="shrink-0">
             <div className="mb-1 text-center text-[11px] text-slate-400">
               Page {pi + 1} / {all.length}

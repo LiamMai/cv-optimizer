@@ -17,10 +17,12 @@ function getColor(score: number): string {
   return '#ef4444'; // red-500
 }
 
-function getTrackColor(score: number): string {
-  if (score >= 75) return '#dcfce7'; // green-100
-  if (score >= 50) return '#fef3c7'; // amber-100
-  return '#fee2e2'; // red-100
+// Tailwind classes (not inline hex) so the track can pick up a dark: variant via CSS,
+// unlike getColor()'s solid arc/label color which reads fine unchanged in both themes.
+function getTrackColorClass(score: number): string {
+  if (score >= 75) return 'stroke-green-100 dark:stroke-green-900/40';
+  if (score >= 50) return 'stroke-amber-100 dark:stroke-amber-900/40';
+  return 'stroke-red-100 dark:stroke-red-900/40';
 }
 
 export function CircularProgress({
@@ -58,7 +60,7 @@ export function CircularProgress({
           cy={cy}
           r={radius}
           fill="none"
-          stroke={getTrackColor(score)}
+          className={getTrackColorClass(score)}
           strokeWidth={strokeWidth}
         />
         {/* Progress */}
@@ -89,7 +91,7 @@ export function CircularProgress({
         </span>
         <span className="text-xs text-slate-500">/ 100</span>
       </div>
-      {label && <span className="text-sm font-medium text-slate-600">{label}</span>}
+      {label && <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{label}</span>}
     </div>
   );
 }
@@ -130,7 +132,7 @@ export function CircularProgressWithCenter({
             cy={cy}
             r={radius}
             fill="none"
-            stroke={getTrackColor(score)}
+            className={getTrackColorClass(score)}
             strokeWidth={strokeWidth}
           />
           <circle
@@ -156,7 +158,7 @@ export function CircularProgressWithCenter({
           <span className="text-xs text-slate-500">/ 100</span>
         </div>
       </div>
-      {label && <span className="text-sm font-semibold text-slate-600">{label}</span>}
+      {label && <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">{label}</span>}
     </div>
   );
 }

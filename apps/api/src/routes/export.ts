@@ -1,10 +1,9 @@
 import express, { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { cvStore, StyleHints } from './cv';
+import { cvStore, StyleHints, CVSections, isEditableSectionKey } from './cv';
 import { jobStore } from './optimize';
 import { exportToPDF, exportToDOCX } from '../services/exporter';
 import { createError } from '../middleware/errorHandler';
-import { CVSections } from './cv';
 
 const router: Router = express.Router();
 
@@ -26,17 +25,6 @@ interface ResolvedSections {
   sections: CVSections;
   fileName: string;
   styleHints?: StyleHints;
-}
-
-// Keys a client may override via `sections` in the export request body —
-// everything editable in CVSections except contact/raw.
-type EditableSectionKey = Exclude<keyof CVSections, 'contact' | 'raw'>;
-const EDITABLE_SECTION_KEYS: readonly string[] = [
-  'summary', 'experience', 'education', 'skills', 'certifications',
-  'projects', 'languages', 'awards', 'publications', 'volunteer', 'other',
-];
-function isEditableSectionKey(key: string): key is EditableSectionKey {
-  return EDITABLE_SECTION_KEYS.includes(key);
 }
 
 /**

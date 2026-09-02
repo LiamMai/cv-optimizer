@@ -15,7 +15,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   if (loading) {
     return (
       <div className="flex min-h-[calc(100vh-57px)] items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
+        <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-500">
           <Loader2 size={32} className="animate-spin" />
           <p className="text-sm">Checking session...</p>
         </div>

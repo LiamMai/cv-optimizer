@@ -122,7 +122,7 @@ export default function UploadPage() {
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8 text-center">
-        <h1 className="mb-2 text-3xl font-extrabold text-slate-900">Upload Your Documents</h1>
+        <h1 className="mb-2 text-3xl font-extrabold text-slate-900 dark:text-slate-100">Upload Your Documents</h1>
         <p className="text-slate-500">
           Add your CV and the job description to get your personalized ATS score.
         </p>
@@ -136,7 +136,7 @@ export default function UploadPage() {
               title="Your CV"
               description="Upload a file or paste your CV text."
               action={
-                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs dark:border-slate-600">
                   <button
                     type="button"
                     onClick={() => setCvMode('file')}
@@ -144,7 +144,7 @@ export default function UploadPage() {
                       'flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors',
                       cvMode === 'file'
                         ? 'bg-primary-600 text-white'
-                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                        : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
                     )}
                   >
                     <UploadIcon size={12} />
@@ -157,7 +157,7 @@ export default function UploadPage() {
                       'flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors',
                       cvMode === 'text'
                         ? 'bg-primary-600 text-white'
-                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                        : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
                     )}
                   >
                     <AlignLeft size={12} />
@@ -181,17 +181,17 @@ export default function UploadPage() {
                     {...register('cvText')}
                     rows={14}
                     placeholder="Paste the full text of your CV here…&#10;&#10;Include your contact info, summary, experience, education, and skills."
-                    className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-primary-900/40"
                   />
                 </div>
               )}
 
               {/* Tips */}
-              <div className="mt-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
-                <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5">
+              <div className="mt-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 dark:border-blue-900 dark:bg-blue-900/20">
+                <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5 dark:text-blue-400">
                   <FileText size={12} /> Tips for best results
                 </p>
-                <ul className="space-y-1 text-xs text-blue-600 list-disc list-inside">
+                <ul className="space-y-1 text-xs text-blue-600 list-disc list-inside dark:text-blue-400">
                   <li>Include full work history with dates</li>
                   <li>List all technical skills and tools</li>
                   <li>Keep education and certifications</li>
@@ -206,7 +206,7 @@ export default function UploadPage() {
               title="Job Description"
               description="Paste the full job description from the listing."
               action={
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-400 dark:text-slate-500">
                   {jdText?.length ?? 0} chars
                 </span>
               }
@@ -214,17 +214,17 @@ export default function UploadPage() {
             <CardContent className="pt-4">
               {/* Company name — optional; auto-filled from the JD when left blank */}
               <div className="mb-3">
-                <label htmlFor="company" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                <label htmlFor="company" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
                   <Building2 size={12} />
                   Company name
-                  <span className="font-normal text-slate-400">— optional, auto-detected from the JD</span>
+                  <span className="font-normal text-slate-400 dark:text-slate-500">— optional, auto-detected from the JD</span>
                 </label>
                 <input
                   id="company"
                   type="text"
                   {...register('company')}
                   placeholder="e.g. Acme Inc. (leave blank to auto-detect)"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-primary-900/40"
                 />
               </div>
 
@@ -233,21 +233,21 @@ export default function UploadPage() {
                 rows={16}
                 placeholder="Paste the full job description here…&#10;&#10;Include the role title, responsibilities, required qualifications, and preferred skills."
                 className={cn(
-                  'w-full resize-none rounded-lg border bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-colors',
+                  'w-full resize-none rounded-lg border bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-colors dark:bg-slate-800 dark:text-slate-200',
                   errors.jdText
-                    ? 'border-red-300 focus:border-red-400 focus:ring-red-100'
-                    : 'border-slate-200 focus:border-primary-400 focus:ring-primary-100'
+                    ? 'border-red-300 focus:border-red-400 focus:ring-red-100 dark:border-red-800 dark:focus:ring-red-900/40'
+                    : 'border-slate-200 focus:border-primary-400 focus:ring-primary-100 dark:border-slate-600 dark:focus:ring-primary-900/40'
                 )}
               />
               {errors.jdText && (
-                <p className="mt-1.5 text-xs text-red-500">{errors.jdText.message}</p>
+                <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">{errors.jdText.message}</p>
               )}
 
-              <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
-                <p className="text-xs font-semibold text-amber-700 mb-1.5 flex items-center gap-1.5">
+              <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 dark:border-amber-900 dark:bg-amber-900/20">
+                <p className="text-xs font-semibold text-amber-700 mb-1.5 flex items-center gap-1.5 dark:text-amber-400">
                   <FileText size={12} /> What we extract
                 </p>
-                <ul className="space-y-1 text-xs text-amber-600 list-disc list-inside">
+                <ul className="space-y-1 text-xs text-amber-600 list-disc list-inside dark:text-amber-400">
                   <li>Required and preferred skills</li>
                   <li>ATS keywords and industry terms</li>
                   <li>Seniority level and responsibilities</li>

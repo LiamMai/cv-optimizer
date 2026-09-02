@@ -21,7 +21,7 @@ function AuthPageInner() {
     <div>
       {errorMessage && (
         <div className="mx-auto mt-6 max-w-lg px-4">
-          <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
             <AlertCircle size={16} className="shrink-0" />
             {errorMessage}
           </div>

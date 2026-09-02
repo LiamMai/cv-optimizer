@@ -78,17 +78,17 @@ export default function ModifyPage({ params }: ModifyPageProps) {
     <AuthGuard>
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
+          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400">
             <Wand2 size={24} />
           </div>
-          <h1 className="mb-2 text-3xl font-extrabold text-slate-900">Modify Your CV</h1>
+          <h1 className="mb-2 text-3xl font-extrabold text-slate-900 dark:text-slate-100">Modify Your CV</h1>
           <p className="text-slate-500">
             Add your new data and the AI updates the right sections — experience, projects, skills —
             following CV best practice. No job description needed.
           </p>
           {cvName && (
-            <p className="mt-2 text-xs text-slate-400">
-              Editing <span className="font-medium text-slate-600">{cvName}</span>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              Editing <span className="font-medium text-slate-600 dark:text-slate-400">{cvName}</span>
             </p>
           )}
         </div>
@@ -97,7 +97,7 @@ export default function ModifyPage({ params }: ModifyPageProps) {
           <CardHeader
             title="What's new?"
             description="A new role, fresh achievements with numbers, projects to add, or things to drop."
-            action={<span className="text-xs text-slate-400">{notes.length} chars</span>}
+            action={<span className="text-xs text-slate-400 dark:text-slate-500">{notes.length} chars</span>}
           />
           <CardContent className="pt-4">
             <textarea
@@ -105,14 +105,14 @@ export default function ModifyPage({ params }: ModifyPageProps) {
               onChange={(e) => setNotes(e.target.value)}
               rows={14}
               placeholder={PLACEHOLDER}
-              className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+              className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-primary-900/40"
             />
 
-            <div className="mt-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
-              <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5">
+            <div className="mt-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 dark:border-blue-900 dark:bg-blue-900/20">
+              <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5 dark:text-blue-400">
                 <Lightbulb size={12} /> How it works
               </p>
-              <ul className="space-y-1 text-xs text-blue-600 list-disc list-inside">
+              <ul className="space-y-1 text-xs text-blue-600 list-disc list-inside dark:text-blue-400">
                 <li>The AI only uses facts you provide — it won't invent metrics or dates.</li>
                 <li>Weak or outdated projects are flagged for removal to keep the CV to {config.maxPages} pages.</li>
                 <li>You review every change (accept / reject) before exporting.</li>
@@ -131,7 +131,7 @@ export default function ModifyPage({ params }: ModifyPageProps) {
           >
             {isSubmitting ? 'Updating…' : 'Modify CV'}
           </Button>
-          <p className="text-xs text-slate-400">Usually takes 10–30 seconds.</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Usually takes 10–30 seconds.</p>
         </div>
       </div>
     </AuthGuard>

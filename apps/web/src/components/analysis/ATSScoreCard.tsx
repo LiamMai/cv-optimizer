@@ -32,7 +32,7 @@ function SubScoreBar({ label, value, delay = 0 }: SubScoreBarProps) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-medium text-slate-600">{label}</span>
+        <span className="font-medium text-slate-600 dark:text-slate-400">{label}</span>
         <span
           className={cn(
             'font-semibold',
@@ -43,7 +43,7 @@ function SubScoreBar({ label, value, delay = 0 }: SubScoreBarProps) {
         </span>
       </div>
       <Progress.Root
-        className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100"
+        className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
         value={progress}
       >
         <Progress.Indicator
@@ -74,7 +74,7 @@ export function ATSScoreCard({ score }: ATSScoreCardProps) {
         {/* Sub-scores */}
         {score.breakdown && (
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Breakdown</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Breakdown</p>
             <SubScoreBar label="Keyword Coverage" value={score.breakdown.keywordScore} delay={0} />
             <SubScoreBar label="Skills Alignment" value={score.breakdown.skillScore} delay={100} />
             <SubScoreBar label="Section Quality" value={score.breakdown.sectionScore} delay={200} />
@@ -83,16 +83,16 @@ export function ATSScoreCard({ score }: ATSScoreCardProps) {
 
         {/* Missing keywords count */}
         {(score.missingKeywords?.length ?? 0) > 0 && (
-          <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm">
-            <span className="font-semibold text-red-700">{score.missingKeywords.length}</span>
-            <span className="text-red-600"> missing keywords detected</span>
+          <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm dark:border-red-800 dark:bg-red-900/30">
+            <span className="font-semibold text-red-700 dark:text-red-400">{score.missingKeywords.length}</span>
+            <span className="text-red-600 dark:text-red-400"> missing keywords detected</span>
           </div>
         )}
 
         {/* Weak sections */}
         {(score.weakSections?.length ?? 0) > 0 && (
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Weak Sections
             </p>
             <div className="flex flex-wrap gap-1.5">

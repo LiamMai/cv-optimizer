@@ -11,40 +11,29 @@ import {
   Columns2,
   CheckCheck,
   X,
-  Eye,
-  GitCompare,
   Wand2,
   ListChecks,
   Trash2,
   HelpCircle,
   RotateCw,
+  Pencil,
+  Eye,
 } from 'lucide-react';
 import { useCVStore } from '@/store/cvStore';
 import { pollJobStatus, exportPDF, exportDOCX, startModification } from '@/lib/api';
-import { SectionDiff } from '@/components/editor/SectionDiff';
-import {
-  CvPage,
-  FormattedCv,
-  FormattedBlocks,
-  PaginatedCv,
-  SectionHeading,
-  sectionLabel,
-  sortByPdfOrder,
-} from '@/components/editor/CvPaper';
+import { CvPage, FormattedCv, PaginatedCv } from '@/components/editor/CvPaper';
+import { BlockEditor } from '@/components/editor/BlockEditor';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { CircularProgressWithCenter } from '@/components/ui/CircularProgress';
-import type { CVSection, SectionDiff as SectionDiffData } from '@/lib/types';
+import type { SectionDiff as SectionDiffData } from '@/lib/types';
 import type { DiffDecision } from '@/lib/diff';
 import { diffBlocks, resolveBlocks, blockHunkIds, type BlockOp } from '@/lib/blockDiff';
-import { formatSection } from '@/lib/cvFormat';
-import { downloadBlob, cn } from '@/lib/utils';
+import { downloadBlob } from '@/lib/utils';
 
 interface EditorPageProps {
   params: { jobId: string };
 }
-
-type RightView = 'review' | 'preview';
 
 export default function EditorPage({ params }: EditorPageProps) {
   const { jobId } = params;
@@ -56,14 +45,16 @@ export default function EditorPage({ params }: EditorPageProps) {
     setDiffDecision,
     setManyDecisions,
     config,
+    sectionOrder,
   } = useCVStore();
 
-  const [rightView, setRightView] = useState<RightView>('review');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingDOCX, setIsExportingDOCX] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [moreNotes, setMoreNotes] = useState('');
   const [isRerunning, setIsRerunning] = useState(false);
+  const [rightMode, setRightMode] = useState<'review' | 'edit'>('review');
+  const [editView, setEditView] = useState<'edit' | 'preview'>('edit');
 
   const job = optimizationJob?.id === jobId ? optimizationJob : null;
 
@@ -111,20 +102,11 @@ export default function EditorPage({ params }: EditorPageProps) {
     return ids;
   }, [opsBySection]);
 
-  // Resolved sections (decisions applied) — used by the preview + export.
-  const resolvedSections = useMemo<CVSection[]>(() => {
-    const sections = job?.result?.optimizedSections ?? [];
-    return sections.map((s) => {
-      const ops = opsBySection[s.type];
-      return ops ? { ...s, content: resolveBlocks(ops, diffDecisions) } : s;
-    });
-  }, [job?.result?.optimizedSections, opsBySection, diffDecisions]);
-
   if (!job) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600 mx-auto" />
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600 mx-auto dark:border-primary-900" />
           <p className="text-slate-500">Loading editor…</p>
         </div>
       </div>
@@ -134,8 +116,8 @@ export default function EditorPage({ params }: EditorPageProps) {
   if (!job.result) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-        <p className="text-slate-600">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600 dark:border-primary-900" />
+        <p className="text-slate-600 dark:text-slate-400">
           {job.jdId === '' ? 'Updating your CV…' : 'Optimization is still in progress.'}
         </p>
         <Link href={job.jdId === '' ? `/modify/${job.cvId}` : `/analysis/${jobId}`}>
@@ -147,8 +129,7 @@ export default function EditorPage({ params }: EditorPageProps) {
     );
   }
 
-  const { originalSections, optimizedSections, diff, atsScore, contact, styleHints } = job.result;
-  const sortedOptimized = sortByPdfOrder(optimizedSections);
+  const { originalSections, optimizedSections, atsScore, contact, styleHints } = job.result;
 
   const isModify = job.result.kind === 'modify';
   const changes = job.result.changes ?? [];
@@ -213,19 +194,19 @@ export default function EditorPage({ params }: EditorPageProps) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-57px)] flex-col overflow-hidden bg-slate-100">
+    <div className="flex h-[calc(100vh-57px)] flex-col overflow-hidden bg-slate-100 dark:bg-slate-900">
       {/* Top bar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6 dark:border-slate-800 dark:bg-slate-800">
         <div className="flex items-center gap-3">
           <Link href={isModify ? `/modify/${job.cvId}` : `/analysis/${jobId}`}>
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
               {isModify ? 'Back' : 'Analysis'}
             </Button>
           </Link>
-          <div className="h-4 w-px bg-slate-200" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
           <div className="flex items-center gap-2">
-            {isModify ? <Wand2 size={16} className="text-primary-500" /> : <Columns2 size={16} className="text-slate-400" />}
-            <span className="text-sm font-semibold text-slate-700">{isModify ? 'Review Modifications' : 'Review Changes'}</span>
+            {isModify ? <Wand2 size={16} className="text-primary-500" /> : <Columns2 size={16} className="text-slate-400 dark:text-slate-500" />}
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{isModify ? 'Review Modifications' : 'Review Changes'}</span>
           </div>
         </div>
 
@@ -246,8 +227,8 @@ export default function EditorPage({ params }: EditorPageProps) {
               <div className="hidden items-center gap-2 sm:flex">
                 <CircularProgressWithCenter score={atsScore.score} size={40} strokeWidth={5} />
                 <div>
-                  <p className="text-xs font-semibold text-slate-700">ATS Score</p>
-                  <p className="text-xs text-slate-400">{atsScore.matchPercent}% match</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">ATS Score</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">{atsScore.matchPercent}% match</p>
                 </div>
               </div>
             )
@@ -282,36 +263,36 @@ export default function EditorPage({ params }: EditorPageProps) {
 
       {/* Modify: "what changed" + re-run with more notes */}
       {isModify && showChanges && (
-        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 dark:border-slate-800 dark:bg-slate-800">
           <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
             <div className="space-y-3">
               {changes.length > 0 && (
                 <div>
-                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     <ListChecks size={13} className="text-emerald-600" /> What the AI did
                   </p>
-                  <ul className="space-y-1 text-xs text-slate-600 list-disc list-inside">
+                  <ul className="space-y-1 text-xs text-slate-600 list-disc list-inside dark:text-slate-400">
                     {changes.map((c, i) => <li key={i}>{c}</li>)}
                   </ul>
                 </div>
               )}
               {removed.length > 0 && (
                 <div>
-                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     <Trash2 size={13} className="text-red-500" /> Removed / recommended to drop
                   </p>
-                  <ul className="space-y-1 text-xs text-slate-600 list-disc list-inside">
+                  <ul className="space-y-1 text-xs text-slate-600 list-disc list-inside dark:text-slate-400">
                     {removed.map((r, i) => <li key={i}>{r}</li>)}
                   </ul>
-                  <p className="mt-1 text-[11px] text-slate-400">Reject the red blocks on the right to keep anything you want.</p>
+                  <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Reject the red blocks on the right to keep anything you want.</p>
                 </div>
               )}
               {needsMoreInfo.length > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-900/20">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                     <HelpCircle size={13} /> Add more detail for a stronger result
                   </p>
-                  <ul className="space-y-1 text-xs text-amber-700 list-disc list-inside">
+                  <ul className="space-y-1 text-xs text-amber-700 list-disc list-inside dark:text-amber-400">
                     {needsMoreInfo.map((q, i) => (
                       <li key={i}>{q.section ? <span className="font-medium">{q.section}: </span> : null}{q.question}</li>
                     ))}
@@ -321,7 +302,7 @@ export default function EditorPage({ params }: EditorPageProps) {
             </div>
 
             <div>
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <RotateCw size={13} className="text-primary-600" /> Not quite right? Add more notes & re-run
               </p>
               <textarea
@@ -329,7 +310,7 @@ export default function EditorPage({ params }: EditorPageProps) {
                 onChange={(e) => setMoreNotes(e.target.value)}
                 rows={5}
                 placeholder="e.g. The latency win was 40% not 30%. Also add that the Rust CLI has 1.2k GitHub stars."
-                className="w-full resize-none rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+                className="w-full resize-none rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
               />
               <div className="mt-2 flex justify-end">
                 <Button size="sm" loading={isRerunning} icon={<RotateCw size={14} />} onClick={handleRerun}>
@@ -344,10 +325,10 @@ export default function EditorPage({ params }: EditorPageProps) {
       {/* Two-column split */}
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Left — original uploaded CV */}
-        <div className="flex w-full flex-col overflow-hidden border-b border-slate-200 lg:w-1/2 lg:border-b-0 lg:border-r">
-          <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-2.5">
-            <h3 className="text-sm font-semibold text-slate-700">Uploaded CV</h3>
-            <p className="text-xs text-slate-400">Your original document</p>
+        <div className="flex w-full flex-col overflow-hidden border-b border-slate-200 lg:w-1/2 lg:border-b-0 lg:border-r dark:border-slate-800">
+          <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-2.5 dark:border-slate-800 dark:bg-slate-800">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Uploaded CV</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Your original document</p>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
             <CvPage contact={contact} styleHints={styleHints}>
@@ -358,62 +339,73 @@ export default function EditorPage({ params }: EditorPageProps) {
 
         {/* Right — optimized CV */}
         <div className="flex w-full flex-col overflow-hidden lg:w-1/2">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-5 py-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-5 py-2 dark:border-slate-800 dark:bg-slate-800">
             <div>
-              <h3 className="text-sm font-semibold text-slate-700">{isModify ? 'Modified CV' : 'Optimized CV'}</h3>
-              <p className="text-xs text-slate-400">
-                {rightView === 'review' ? 'Accept or reject each change' : 'Final result preview'}
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{isModify ? 'Modified CV' : 'Optimized CV'}</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {rightMode === 'review'
+                  ? 'Accept or reject each change — paginated to match the exported PDF'
+                  : editView === 'edit'
+                    ? 'Drag to reorder, click text to edit, add or remove lines'
+                    : 'Paginated to match the exported PDF — section order shown here is preview-only'}
               </p>
             </div>
-            {/* View toggle */}
-            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium">
+            <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
               <button
-                onClick={() => setRightView('review')}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1.5 transition-colors',
-                  rightView === 'review' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                )}
+                type="button"
+                onClick={() => setRightMode('review')}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${rightMode === 'review' ? 'bg-primary-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'}`}
               >
-                <GitCompare size={13} /> Review
+                Review
               </button>
               <button
-                onClick={() => setRightView('preview')}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1.5 transition-colors',
-                  rightView === 'preview' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                )}
+                type="button"
+                onClick={() => setRightMode('edit')}
+                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${rightMode === 'edit' ? 'bg-primary-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'}`}
               >
-                <Eye size={13} /> Preview
+                <Pencil size={11} /> Edit
               </button>
             </div>
           </div>
+
+          {rightMode === 'edit' && (
+            <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-5 py-1.5 dark:border-slate-800 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditView('edit')}
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${editView === 'edit' ? 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+              >
+                <Pencil size={11} /> Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditView('preview')}
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${editView === 'preview' ? 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+              >
+                <Eye size={11} /> Preview
+              </button>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
-            {rightView === 'preview' ? (
-              <PaginatedCv contact={contact} sections={resolvedSections} styleHints={styleHints} />
+            {rightMode === 'review' ? (
+              <PaginatedCv
+                contact={contact}
+                sections={optimizedSections}
+                styleHints={styleHints}
+                opsBySection={opsBySection}
+                decisions={diffDecisions}
+                onDecide={setDiffDecision}
+              />
+            ) : editView === 'edit' ? (
+              <BlockEditor jobId={jobId} sections={optimizedSections} />
             ) : (
-              <CvPage contact={contact} styleHints={styleHints}>
-                {sortedOptimized.map((section) => {
-                  const ops = opsBySection[section.type];
-                  const hasDiff = diff.some((d) => d.sectionType === section.type);
-                  return (
-                    <section key={section.type}>
-                      <SectionHeading>
-                        {sectionLabel(section.type)}
-                        {hasDiff && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-700">
-                            edited
-                          </span>
-                        )}
-                      </SectionHeading>
-                      {ops && hasDiff ? (
-                        <SectionDiff ops={ops} decisions={diffDecisions} onDecide={setDiffDecision} />
-                      ) : (
-                        <FormattedBlocks blocks={formatSection(section.type, section.content)} />
-                      )}
-                    </section>
-                  );
-                })}
-              </CvPage>
+              <PaginatedCv
+                contact={contact}
+                sections={optimizedSections}
+                styleHints={styleHints}
+                sectionOrder={sectionOrder ?? undefined}
+              />
             )}
           </div>
         </div>

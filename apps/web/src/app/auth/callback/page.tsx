@@ -9,11 +9,11 @@ import { useAuthStore } from '@/store/authStore';
 function Spinner() {
   return (
     <div className="flex min-h-[calc(100vh-57px)] items-center justify-center">
-      <div className="flex flex-col items-center gap-4 text-slate-400">
+      <div className="flex flex-col items-center gap-4 text-slate-400 dark:text-slate-500">
         <Loader2 size={36} className="animate-spin text-primary-500" />
         <div className="text-center">
-          <p className="text-sm font-medium text-slate-600">Completing sign-in...</p>
-          <p className="mt-1 text-xs text-slate-400">Verifying your session with Google</p>
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Completing sign-in...</p>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Verifying your session with Google</p>
         </div>
       </div>
     </div>

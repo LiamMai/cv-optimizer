@@ -22,9 +22,9 @@ function SkeletonCard({ lines = 3 }: { lines?: number }) {
   return (
     <Card>
       <CardContent className="space-y-3 py-6">
-        <div className="h-4 w-1/3 animate-pulse rounded bg-slate-200" />
+        <div className="h-4 w-1/3 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
         {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="h-3 animate-pulse rounded bg-slate-100" style={{ width: `${70 + i * 8}%` }} />
+          <div key={i} className="h-3 animate-pulse rounded bg-slate-100 dark:bg-slate-800" style={{ width: `${Math.min(95, 70 + i * 8)}%` }} />
         ))}
       </CardContent>
     </Card>
@@ -91,8 +91,8 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            ATS Analysis{company ? <span className="text-slate-400 font-semibold"> · {company}</span> : null}
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+            ATS Analysis{company ? <span className="text-slate-400 font-semibold dark:text-slate-500"> · {company}</span> : null}
           </h1>
           <p className="text-sm text-slate-500">Job ID: {jobId}</p>
         </div>
@@ -120,12 +120,12 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
 
       {/* Failed state */}
       {isFailed && (
-        <Card className="mb-6 border-red-200 bg-red-50">
+        <Card className="mb-6 border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-900/20">
           <CardContent className="flex items-start gap-3 py-5">
             <AlertTriangle size={20} className="text-red-500 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-red-700">Optimization failed</p>
-              <p className="text-sm text-red-600 mt-1">{job?.error ?? 'An unknown error occurred.'}</p>
+              <p className="font-semibold text-red-700 dark:text-red-400">Optimization failed</p>
+              <p className="text-sm text-red-600 mt-1 dark:text-red-400">{job?.error ?? 'An unknown error occurred.'}</p>
               <Link href="/upload" className="mt-3 inline-block">
                 <Button variant="danger" size="sm">Try Again</Button>
               </Link>
@@ -137,17 +137,17 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
       {/* Loading skeleton */}
       {isPending && (
         <div className="space-y-6">
-          <div className="rounded-2xl bg-gradient-to-br from-primary-50 to-blue-50 border border-primary-100 px-6 py-8 text-center">
+          <div className="rounded-2xl bg-gradient-to-br from-primary-50 to-blue-50 border border-primary-100 px-6 py-8 text-center dark:border-primary-900 dark:from-primary-950/40 dark:to-blue-950/40">
             <div className="flex flex-col items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
-                <div className="absolute inset-0 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-                <RefreshCw size={22} className="text-primary-500" />
+                <div className="absolute inset-0 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600 dark:border-primary-900" />
+                <RefreshCw size={22} className="animate-spin text-primary-500" />
               </div>
               <div>
-                <p className="font-semibold text-primary-800 text-lg">
+                <p className="font-semibold text-primary-800 text-lg dark:text-primary-300">
                   {job?.status === 'processing' ? 'AI is rewriting your CV…' : 'Queued for processing…'}
                 </p>
-                <p className="text-sm text-primary-600 mt-1">
+                <p className="text-sm text-primary-600 mt-1 dark:text-primary-400">
                   Analyzing keywords, scoring sections, and generating optimized content.
                 </p>
               </div>
@@ -179,9 +179,9 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
               <CardContent className="pt-2 pb-4">
                 <ul className="space-y-2">
                   {(atsScore.weakSections ?? []).map((section) => (
-                    <li key={section} className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5">
+                    <li key={section} className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 dark:border-amber-900/50 dark:bg-amber-900/20">
                       <AlertTriangle size={15} className="text-amber-500 shrink-0" />
-                      <span className="text-sm font-medium text-amber-800 capitalize">{section}</span>
+                      <span className="text-sm font-medium text-amber-800 capitalize dark:text-amber-300">{section}</span>
                     </li>
                   ))}
                 </ul>
@@ -200,11 +200,11 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                       key={idx}
                       className={cn(
                         'flex items-start gap-3 rounded-lg px-4 py-3 text-sm',
-                        idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'
+                        idx % 2 === 0 ? 'bg-slate-50 dark:bg-slate-900' : 'bg-white dark:bg-slate-800'
                       )}
                     >
                       <Lightbulb size={15} className="mt-0.5 text-primary-500 shrink-0" />
-                      <span className="text-slate-700">{suggestion}</span>
+                      <span className="text-slate-700 dark:text-slate-300">{suggestion}</span>
                     </li>
                   ))}
                 </ul>

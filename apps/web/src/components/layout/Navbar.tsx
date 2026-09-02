@@ -7,6 +7,7 @@ import { FileText, Home, Plus, Clock, LogOut, Wifi, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { logout } from '@/lib/api';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 const navLinks = [
   { label: 'Dashboard', href: '/', icon: Home },
@@ -59,7 +60,7 @@ function AuthStatus() {
   // Skeleton while loading
   if (loading) {
     return (
-      <div className="h-7 w-28 animate-pulse rounded-full bg-slate-100" />
+      <div className="h-7 w-28 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
     );
   }
 
@@ -69,12 +70,12 @@ function AuthStatus() {
     return (
       <div className="flex items-center gap-2">
         {/* Provider badge */}
-        <div className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+        <div className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400">
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
           {auth.user?.name ? (
             <span className="hidden sm:inline">{auth.user.name.split(' ')[0]}</span>
           ) : null}
-          <span className="text-green-600">via {providerLabel}</span>
+          <span className="text-green-600 dark:text-green-400">via {providerLabel}</span>
         </div>
 
         {/* Disconnect button */}
@@ -82,7 +83,7 @@ function AuthStatus() {
           onClick={handleDisconnect}
           disabled={loggingOut}
           title="Disconnect AI provider"
-          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-slate-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
         >
           <LogOut size={13} />
           <span className="hidden sm:inline">Disconnect</span>
@@ -95,7 +96,7 @@ function AuthStatus() {
   return (
     <Link
       href="/auth"
-      className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100"
+      className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50"
     >
       <Wifi size={13} />
       Connect AI
@@ -109,10 +110,10 @@ export function Navbar() {
   const isOnFlow = activeStep >= 0;
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
+    <nav className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 text-primary-700 hover:text-primary-800">
+        <Link href="/" className="flex items-center gap-2 text-primary-700 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
             <FileText size={16} />
           </div>
@@ -128,7 +129,7 @@ export function Navbar() {
                   <div
                     className={cn(
                       'h-px w-8 transition-colors',
-                      idx <= activeStep ? 'bg-primary-500' : 'bg-slate-200'
+                      idx <= activeStep ? 'bg-primary-500' : 'bg-slate-200 dark:bg-slate-700'
                     )}
                   />
                 )}
@@ -139,8 +140,8 @@ export function Navbar() {
                       idx < activeStep
                         ? 'bg-primary-600 text-white'
                         : idx === activeStep
-                        ? 'border-2 border-primary-600 bg-white text-primary-600'
-                        : 'border-2 border-slate-200 bg-white text-slate-400'
+                        ? 'border-2 border-primary-600 bg-white text-primary-600 dark:bg-slate-900'
+                        : 'border-2 border-slate-200 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500'
                     )}
                   >
                     {idx < activeStep ? '✓' : idx + 1}
@@ -148,7 +149,7 @@ export function Navbar() {
                   <span
                     className={cn(
                       'text-xs',
-                      idx === activeStep ? 'font-semibold text-primary-600' : 'text-slate-400'
+                      idx === activeStep ? 'font-semibold text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-500'
                     )}
                   >
                     {step.label}
@@ -159,7 +160,7 @@ export function Navbar() {
           </div>
         )}
 
-        {/* Right side: nav links + auth status */}
+        {/* Right side: nav links + theme toggle + auth status */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             {navLinks.map(({ label, href, icon: Icon }) => (
@@ -169,8 +170,8 @@ export function Navbar() {
                 className={cn(
                   'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                   pathname === href
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
                 )}
               >
                 <Icon size={15} />
@@ -179,8 +180,10 @@ export function Navbar() {
             ))}
           </div>
 
+          <ThemeToggle />
+
           {/* Divider */}
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
 
           <AuthStatus />
         </div>

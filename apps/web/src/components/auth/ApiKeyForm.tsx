@@ -41,7 +41,7 @@ export function ApiKeyForm({ provider, onSuccess }: ApiKeyFormProps) {
   return (
     <form onSubmit={handleSubmit} className="mt-4 space-y-3">
       <div>
-        <label htmlFor="api-key-input" className="mb-1.5 block text-xs font-semibold text-slate-700">
+        <label htmlFor="api-key-input" className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
           {provider.name} API Key
         </label>
 
@@ -54,12 +54,12 @@ export function ApiKeyForm({ provider, onSuccess }: ApiKeyFormProps) {
             placeholder={provider.keyPlaceholder ?? 'Paste your API key...'}
             autoComplete="off"
             spellCheck={false}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-3 pr-10 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-3 pr-10 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-primary-900/50"
           />
           <button
             type="button"
             onClick={() => setVisible((v) => !v)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
             aria-label={visible ? 'Hide API key' : 'Show API key'}
           >
             {visible ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -67,7 +67,7 @@ export function ApiKeyForm({ provider, onSuccess }: ApiKeyFormProps) {
         </div>
 
         {provider.keyHint && (
-          <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-400">
+          <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
             <ExternalLink size={11} />
             {provider.keyHint}
           </p>
@@ -75,7 +75,7 @@ export function ApiKeyForm({ provider, onSuccess }: ApiKeyFormProps) {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
           {error}
         </p>
       )}

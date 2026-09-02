@@ -28,7 +28,7 @@ export default function HistoryPage() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Application History</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Application History</h1>
             <p className="text-sm text-slate-500">Companies you&apos;ve tailored your CV for.</p>
           </div>
           {mounted && entries.length > 0 && (
@@ -42,10 +42,10 @@ export default function HistoryPage() {
         {mounted && entries.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800">
                 <Clock size={22} />
               </div>
-              <p className="font-medium text-slate-700">No applications yet</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300">No applications yet</p>
               <p className="max-w-sm text-sm text-slate-500">
                 Each time you optimize your CV for a job, the company gets saved here automatically.
               </p>
@@ -65,13 +65,13 @@ export default function HistoryPage() {
               <li key={entry.id}>
                 <Card>
                   <CardContent className="flex items-center gap-4 py-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
                       <Building2 size={18} />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="truncate font-semibold text-slate-900">
+                        <p className="truncate font-semibold text-slate-900 dark:text-slate-100">
                           {entry.company || 'Unknown company'}
                         </p>
                         {entry.companyAutofilled && entry.company && (
@@ -82,14 +82,14 @@ export default function HistoryPage() {
                       </div>
                       <p className="truncate text-sm text-slate-500">
                         {entry.jobTitle || 'Untitled role'}
-                        <span className="text-slate-300"> · </span>
+                        <span className="text-slate-300 dark:text-slate-600"> · </span>
                         {formatDate(entry.appliedAt)}
                       </p>
                     </div>
 
                     {typeof entry.atsScore === 'number' && (
                       <div className="shrink-0 text-right">
-                        <p className="text-lg font-bold text-slate-900">{entry.atsScore}</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{entry.atsScore}</p>
                         <p className="text-[10px] uppercase tracking-wide text-slate-400">ATS</p>
                       </div>
                     )}
@@ -101,7 +101,7 @@ export default function HistoryPage() {
                       <button
                         onClick={() => removeEntry(entry.id)}
                         title="Remove from history"
-                        className="flex items-center rounded-lg px-2 py-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        className="flex items-center rounded-lg px-2 py-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
                       >
                         <Trash2 size={15} />
                       </button>

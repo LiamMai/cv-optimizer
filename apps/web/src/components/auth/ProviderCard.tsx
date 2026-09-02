@@ -47,8 +47,8 @@ export function ProviderCard({ provider, selected, onSelect }: ProviderCardProps
       className={cn(
         'relative flex w-full flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2',
         selected
-          ? 'border-primary-500 bg-primary-50 shadow-sm'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+          ? 'border-primary-500 bg-primary-50 shadow-sm dark:bg-primary-900/30'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600 dark:hover:bg-slate-700'
       )}
     >
       {/* Selected checkmark */}
@@ -60,7 +60,7 @@ export function ProviderCard({ provider, selected, onSelect }: ProviderCardProps
 
       {/* Icon + badges */}
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm border border-slate-100">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-700">
           {provider.id === 'gemini-oauth' ? (
             <GoogleIcon />
           ) : (
@@ -69,7 +69,7 @@ export function ProviderCard({ provider, selected, onSelect }: ProviderCardProps
         </span>
 
         {provider.free && (
-          <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+          <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
             FREE
           </span>
         )}
@@ -77,7 +77,7 @@ export function ProviderCard({ provider, selected, onSelect }: ProviderCardProps
 
       {/* Text */}
       <div>
-        <p className={cn('text-sm font-semibold', selected ? 'text-primary-800' : 'text-slate-800')}>
+        <p className={cn('text-sm font-semibold', selected ? 'text-primary-800 dark:text-primary-300' : 'text-slate-800 dark:text-slate-200')}>
           {provider.name}
         </p>
         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{provider.description}</p>

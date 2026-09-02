@@ -158,7 +158,7 @@ export function runsToText(runs: InlineRun[]): string {
 }
 
 /** Markdown text of a run sequence (round-trips links as [text](url), bold as **text**, italic as *text*). */
-function runsToMarkdown(runs: InlineRun[]): string {
+export function runsToMarkdown(runs: InlineRun[]): string {
   return runs
     .map((r) => {
       let t = r.href && r.href !== r.text ? `[${r.text}](${r.href})` : r.text;
@@ -196,4 +196,30 @@ export function formatSection(type: string, content: string): CvBlock[] {
   if (kind === 'paragraph') return formatParagraph(content);
   if (kind === 'entries') return formatEntries(content);
   return formatList(content);
+}
+
+/**
+ * Group a flat item list into entry groups: an 'entry'-kind item plus every
+ * 'bullet'-kind item immediately after it belong to one group; anything else
+ * (a lone bullet in a list section, a paragraph) is its own group of one.
+ * Generic over the item type so it works for both `CvBlock[]` (plain rendering)
+ * and `BlockOp[]` (diff-aware rendering) — pass `kindOf` to read each item's
+ * underlying block kind.
+ */
+export function groupEntries<T>(items: T[], kindOf: (item: T) => CvBlock['kind']): T[][] {
+  const groups: T[][] = [];
+  let inEntry = false;
+  for (const item of items) {
+    const kind = kindOf(item);
+    if (kind === 'entry') {
+      groups.push([item]);
+      inEntry = true;
+    } else if (inEntry && kind === 'bullet') {
+      groups[groups.length - 1].push(item);
+    } else {
+      groups.push([item]);
+      inEntry = false;
+    }
+  }
+  return groups;
 }

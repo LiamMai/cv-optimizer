@@ -17,21 +17,21 @@ export function KeywordChips({ matched, missing }: KeywordChipsProps) {
         {/* Matched */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-600">
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400">
               Matched Keywords
             </p>
-            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200 dark:text-green-400 dark:bg-green-900/30 dark:border-green-800">
               {matched.length}
             </span>
           </div>
           {matched.length === 0 ? (
-            <p className="text-sm text-slate-400 italic">No matched keywords found.</p>
+            <p className="text-sm text-slate-400 italic dark:text-slate-500">No matched keywords found.</p>
           ) : (
             <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto scrollbar-thin pr-1">
               {matched.map((kw) => (
                 <span
                   key={kw}
-                  className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
+                  className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400"
                 >
                   <CheckCircle size={11} className="shrink-0" />
                   {kw}
@@ -41,26 +41,26 @@ export function KeywordChips({ matched, missing }: KeywordChipsProps) {
           )}
         </div>
 
-        <div className="border-t border-slate-100" />
+        <div className="border-t border-slate-100 dark:border-slate-700" />
 
         {/* Missing */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-red-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400">
               Missing Keywords
             </p>
-            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
+            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200 dark:text-red-400 dark:bg-red-900/30 dark:border-red-800">
               {missing.length}
             </span>
           </div>
           {missing.length === 0 ? (
-            <p className="text-sm text-slate-400 italic">All keywords covered!</p>
+            <p className="text-sm text-slate-400 italic dark:text-slate-500">All keywords covered!</p>
           ) : (
             <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto scrollbar-thin pr-1">
               {missing.map((kw) => (
                 <span
                   key={kw}
-                  className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700"
+                  className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-400"
                 >
                   <Plus size={11} className="shrink-0" />
                   {kw}

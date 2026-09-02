@@ -1,9 +1,10 @@
 import express, { Router, Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-import { cvStore, CVRecord } from './cv';
+import { cvStore, CVRecord, CVSections, isEditableSectionKey } from './cv';
 import { jdStore, JDRecord } from './jd';
 import { optimize, OptimizeResult } from '../services/cvOptimizer';
+import { score as scoreAts } from '../services/atsScorer';
 import { createError } from '../middleware/errorHandler';
 import { requireAuth } from '../middleware/requireAuth';
 import type { SessionCredentials } from '../services/aiProvider';
@@ -142,6 +143,42 @@ router.get('/:jobId', (req: Request, res: Response, next: NextFunction) => {
     }
 
     res.json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/optimize/:jobId/score — recompute the ATS score against the
+// current (possibly user-edited) CV content, without re-running the AI.
+// ---------------------------------------------------------------------------
+const RescoreSchema = z.object({
+  sections: z.record(z.string()).optional(),
+});
+
+router.post('/:jobId/score', express.json(), (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = RescoreSchema.safeParse(req.body);
+    if (!parsed.success) throw parsed.error;
+
+    const job = jobStore.get(req.params.jobId);
+    if (!job) throw createError(404, `Optimization job "${req.params.jobId}" not found.`);
+    if (job.status !== 'completed' || !job.result) {
+      throw createError(409, `Job is not completed yet (status: ${job.status}). Wait until status is "completed".`);
+    }
+
+    const jdRecord = jdStore.get(job.jdId);
+    if (!jdRecord) throw createError(404, `JD for job "${req.params.jobId}" not found.`);
+
+    const sections: CVSections = { ...job.result.optimizedSections };
+    if (parsed.data.sections) {
+      for (const [key, value] of Object.entries(parsed.data.sections)) {
+        if (isEditableSectionKey(key)) sections[key] = value;
+      }
+    }
+
+    const atsScore = scoreAts(sections, jdRecord.analysis);
+    res.json({ atsScore });
   } catch (err) {
     next(err);
   }

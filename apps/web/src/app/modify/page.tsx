@@ -77,10 +77,10 @@ export default function ModifyEntryPage() {
     <AuthGuard>
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
+          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400">
             <Wand2 size={24} />
           </div>
-          <h1 className="mb-2 text-3xl font-extrabold text-slate-900">Modify Your CV</h1>
+          <h1 className="mb-2 text-3xl font-extrabold text-slate-900 dark:text-slate-100">Modify Your CV</h1>
           <p className="text-slate-500">
             Provide your CV and what&apos;s new — the AI updates the right sections following CV best
             practice. No job description needed.
@@ -94,13 +94,13 @@ export default function ModifyEntryPage() {
               title="Your CV"
               description="Upload a file or paste your CV text."
               action={
-                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs dark:border-slate-600">
                   <button
                     type="button"
                     onClick={() => setCvMode('file')}
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors',
-                      cvMode === 'file' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                      cvMode === 'file' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
                     )}
                   >
                     <UploadIcon size={12} /> File
@@ -110,7 +110,7 @@ export default function ModifyEntryPage() {
                     onClick={() => setCvMode('text')}
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors',
-                      cvMode === 'text' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                      cvMode === 'text' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
                     )}
                   >
                     <AlignLeft size={12} /> Paste
@@ -133,7 +133,7 @@ export default function ModifyEntryPage() {
                   onChange={(e) => setCvText(e.target.value)}
                   rows={16}
                   placeholder="Paste the full text of your CV here…&#10;&#10;Include your contact info, summary, experience, education, and skills."
-                  className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+                  className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-primary-900/40"
                 />
               )}
             </CardContent>
@@ -144,7 +144,7 @@ export default function ModifyEntryPage() {
             <CardHeader
               title="What's new?"
               description="A new role, fresh achievements with numbers, projects to add, or things to drop."
-              action={<span className="text-xs text-slate-400">{notes.length} chars</span>}
+              action={<span className="text-xs text-slate-400 dark:text-slate-500">{notes.length} chars</span>}
             />
             <CardContent className="pt-4">
               <textarea
@@ -152,14 +152,14 @@ export default function ModifyEntryPage() {
                 onChange={(e) => setNotes(e.target.value)}
                 rows={16}
                 placeholder={PLACEHOLDER}
-                className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors"
+                className="w-full resize-none rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-primary-900/40"
               />
 
-              <div className="mt-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
-                <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5">
+              <div className="mt-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 dark:border-blue-900 dark:bg-blue-900/20">
+                <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5 dark:text-blue-400">
                   <Lightbulb size={12} /> How it works
                 </p>
-                <ul className="space-y-1 text-xs text-blue-600 list-disc list-inside">
+                <ul className="space-y-1 text-xs text-blue-600 list-disc list-inside dark:text-blue-400">
                   <li>The AI only uses facts you provide — it won&apos;t invent metrics or dates.</li>
                   <li>Weak or outdated projects are flagged for removal to keep the CV to {config.maxPages} pages.</li>
                   <li>You review every change (accept / reject) before exporting.</li>
@@ -179,7 +179,7 @@ export default function ModifyEntryPage() {
           >
             {isSubmitting ? 'Updating…' : 'Modify CV'}
           </Button>
-          <p className="text-xs text-slate-400">Usually takes 10–30 seconds depending on CV length.</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Usually takes 10–30 seconds depending on CV length.</p>
         </div>
       </div>
     </AuthGuard>

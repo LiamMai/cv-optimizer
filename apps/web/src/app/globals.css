@@ -5,11 +5,16 @@
 :root {
   --background: 255 255 255;
   --foreground: 15 23 42;
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-900 dark:text-slate-100;
   }
   h1 {
     @apply text-4xl font-bold tracking-tight;

@@ -10,7 +10,7 @@ AI-powered resume builder that tailors your CV to any job description. Parses yo
 2. **Paste JD** — Extracts required skills, keywords, seniority level, responsibilities.
 3. **AI Optimization** — Rewrites bullet points and sections to match the JD while keeping bold/italic emphasis intact. Enforces human-like writing, no hallucination, measurable achievements.
 4. **ATS Score** — 0–100 score with keyword gap analysis and section-by-section breakdown.
-5. **Edit & Export** — TipTap rich-text editor with accept/reject per-section diffs. Paginated A4 preview mirrors the PDF (same fonts/sizes, style hints applied, same page-break rules — pages fill, and an entry header never separates from its first bullets). Export to PDF or DOCX.
+5. **Edit & Export** — Accept/reject per-section diffs, or switch to the block editor: drag to reorder sections/entries/bullets, click any line to edit its text (bold/italic markdown, `Ctrl/Cmd+B`/`Ctrl/Cmd+I`), add or delete bullets/entries/sections. The ATS score recomputes automatically a moment after each edit. A "Preview" tab shows the real paginated A4 layout mirroring the PDF (same fonts/sizes, style hints applied, same page-break rules — pages fill, and an entry header never separates from its first bullets); section drag-order is preview-only and doesn't yet affect the exported file. Export to PDF or DOCX.
 6. **Modify from your data** — Skip the JD: hand the AI free-form notes (new role, fresh metrics, projects to drop) and it folds them into the right sections, mirrors existing entry structure, re-sorts by date, and asks follow-up questions where your notes are too thin. Returns the same accept/reject diff as optimization.
 7. **History** — Every job is remembered locally (company, job title, ATS score, date) so you can re-open past results and track which companies you've applied to.
 
@@ -42,7 +42,7 @@ Pick how the AI runs from the **Connect Provider** screen. Three ways:
 
 | Layer | Tech |
 |---|---|
-| Frontend | Next.js 14, TypeScript, TailwindCSS, Zustand, TipTap, React Hook Form |
+| Frontend | Next.js 14, TypeScript, TailwindCSS, Zustand, dnd-kit, React Hook Form |
 | Backend | Node.js, Express, TypeScript |
 | AI | Anthropic Claude, OpenAI, Google Gemini, Groq — selectable per session |
 | Database | PostgreSQL via Prisma ORM |
@@ -80,13 +80,13 @@ cv-optimizer/
 │           │   ├── page.tsx              Dashboard
 │           │   ├── upload/page.tsx       Upload CV + JD
 │           │   ├── analysis/[jobId]/     ATS score + keyword gaps
-│           │   ├── editor/[jobId]/       CV editor + AI suggestions
+│           │   ├── editor/[jobId]/       CV editor — diff review + drag/edit block editor
 │           │   ├── modify/              Modify-from-notes wizard (page.tsx + [cvId]/)
 │           │   └── history/page.tsx     Past jobs (company, role, ATS score)
 │           ├── components/
 │           │   ├── ui/           Button, Card, Badge, CircularProgress
 │           │   ├── upload/       FileDropzone
-│           │   ├── editor/       CVEditor (TipTap), SuggestionsPanel, split-diff view
+│           │   ├── editor/       CvPaper (paginated preview + diff review), BlockEditor (drag-reorder, inline edit, add/delete)
 │           │   ├── analysis/     ATSScoreCard, KeywordChips
 │           │   ├── auth/         ProviderCard, ConnectProviderModal (provider + model picker)
 │           │   └── layout/       Navbar with step indicator
@@ -239,6 +239,7 @@ All routes are prefixed with `/api/v1`.
 |---|---|---|
 | `POST` | `/optimize` | Start optimization job — returns `{ jobId }` immediately |
 | `GET` | `/optimize/:jobId` | Poll job status and result |
+| `POST` | `/optimize/:jobId/score` | Recompute the ATS score against edited content (body: `{ sections? }`, same per-section override shape as export); no AI call — used by the block editor's live rescore |
 
 ### Modify (from user data, no JD)
 

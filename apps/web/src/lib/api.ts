@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ParsedCV, JDAnalysis, OptimizationConfig, OptimizationJob, AuthState, StyleHints } from './types';
+import type { ParsedCV, JDAnalysis, OptimizationConfig, OptimizationJob, AuthState, StyleHints, ATSScore } from './types';
 
 const api = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1`,
@@ -178,6 +178,21 @@ export async function pollJobStatus(jobId: string, signal?: AbortSignal): Promis
   }
 
   return job;
+}
+
+/** Recompute the ATS score against edited section content, without re-running the AI. */
+export async function rescoreJob(jobId: string, sections: Record<string, string>): Promise<ATSScore> {
+  const response = await api.post<{ atsScore: RawAtsScore }>(`/optimize/${jobId}/score`, { sections });
+  const ats = response.data.atsScore;
+  return {
+    score: ats.score ?? 0,
+    matchPercent: ats.matchPercent ?? 0,
+    coveredKeywords: ats.coveredKeywords ?? [],
+    missingKeywords: ats.missingKeywords ?? [],
+    weakSections: ats.weakSections ?? [],
+    suggestions: ats.suggestions ?? [],
+    breakdown: ats.breakdown ?? null,
+  };
 }
 
 export interface ExportFile {

@@ -15,9 +15,9 @@ const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary:
     'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 shadow-sm disabled:bg-primary-300',
   secondary:
-    'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-400 shadow-sm disabled:text-slate-400 disabled:bg-slate-50',
+    'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-400 shadow-sm disabled:text-slate-400 disabled:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700 dark:disabled:text-slate-500 dark:disabled:bg-slate-800',
   ghost:
-    'bg-transparent text-slate-600 hover:bg-slate-100 focus:ring-slate-400 disabled:text-slate-400',
+    'bg-transparent text-slate-600 hover:bg-slate-100 focus:ring-slate-400 disabled:text-slate-400 dark:text-slate-400 dark:hover:bg-slate-800 dark:disabled:text-slate-600',
   danger:
     'bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500 shadow-sm disabled:bg-danger-300',
 };
