@@ -87,6 +87,7 @@ app.get('/health', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     provider: config.ai.provider,
     env: config.env,
+    ciTest: true,
   });
 });
 
